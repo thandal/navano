@@ -120,7 +120,7 @@ export default {
       if (this.confirmScreen) {
         return "Confirm";
       }
-      return "Send NANO";
+      return "Send Nano";
     }
   },
   watch: {

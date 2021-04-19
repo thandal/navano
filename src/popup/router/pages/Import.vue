@@ -4,10 +4,10 @@
       <div class="headerText container">
         <h1>Import wallet</h1>
         <p>
-          Your NANO seed is stored locally and protected by a password.
+          Your wallet seed is stored locally and protected by a password.
           <span
             class="bold"
-          >VANO cannot restore your seed or password.</span>
+          >Navano cannot restore your seed or password.</span>
         </p>
       </div>
     </div>
@@ -15,7 +15,7 @@
     <div class="inputWrapper container">
       <textarea
         type="text"
-        placeholder="YOUR NANO SEED"
+        placeholder="YOUR WALLET SEED"
         v-model="seed"
         maxlength="128"
         autocomplete="off"

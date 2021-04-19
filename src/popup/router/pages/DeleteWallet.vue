@@ -25,7 +25,7 @@
         <label for="sure" ref="label" class="checkbox">
           <input type="checkbox" name="sure" id="sure" v-model="checked">
           I understand that I will remove my local wallet.
-          <b>VANO cannot restore the wallet. Make sure you have a backup.</b>
+          <b>Navano cannot restore the wallet without the seed. Make sure you have a backup.</b>
         </label>
         <button class="remove" @click="removeData">Remove wallet &amp; Proceed</button>
       </div>

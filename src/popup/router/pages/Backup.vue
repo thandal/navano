@@ -9,7 +9,7 @@
     <div class="overview container">
       <p>
         Make sure to write down your seed or save it somewhere safe,
-        and never share it with anyone! It is the master key to your NANO wallet,
+        and never share it with anyone! It is the master key to your Nano wallet,
         and the only way to recover your funds in an emergency.
       </p>
       <div class="showSeed">

@@ -4,7 +4,7 @@
       <div class="headerText container">
         <h1>Wallet created</h1>
         <p>
-          The seed below is the master key to your NANO wallet.
+          The seed below is the master key to your Nano wallet.
           <span
             class="bold"
           >Make sure to write it down and save it somewhere safe!</span>
@@ -55,8 +55,8 @@
 <script>
 import navigation from "../navigation.js";
 import {
-  generateSeedBytes,
-  uint8ToHex,
+//  generateSeedBytes,
+//  uint8ToHex,
   getLocalStorageItem,
   setLocalStorageItem
 } from "../../../utils/services.js";
@@ -71,7 +71,10 @@ export default {
   },
   methods: {
     retry() {
-      this.generated_seed = uint8ToHex(generateSeedBytes());
+      //this.generated_seed = uint8ToHex(generateSeedBytes());
+      var arr = new Uint8Array(64);
+      window.crypto.getRandomValues(arr);
+      this.generated_seed = Array.from(arr, function f(dec) { return dec.toString(16).padStart(2, "0"); }).join('')
       setLocalStorageItem("generatedSeed", this.generated_seed);
     },
 
@@ -87,7 +90,10 @@ export default {
     this.generated_seed = (await getLocalStorageItem("generatedSeed")) || false;
 
     if (!this.generated_seed) {
-      this.generated_seed = uint8ToHex(generateSeedBytes());
+      //this.generated_seed = uint8ToHex(generateSeedBytes());
+      var arr = new Uint8Array(64);
+      window.crypto.getRandomValues(arr);
+      this.generated_seed = Array.from(arr, function f(dec) { return dec.toString(16).padStart(2, "0"); }).join('')
       setLocalStorageItem("generatedSeed", this.generated_seed);
     }
   },

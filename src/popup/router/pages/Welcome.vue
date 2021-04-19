@@ -4,7 +4,7 @@
       <div class="headerText container">
         <h1>Welcome</h1>
         <p>
-          Navano is a light-wallet that interacts with nano,
+          Navano is a light-wallet that interacts with Nano,
           a cryptocurrency with fast transactions and
           zero fees over a decentralised network.
         </p>

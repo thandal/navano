@@ -8,7 +8,7 @@
 
     <div class="overview">
       <div class="balance">
-        <span class="nanoBalance no-hl">NANO balance:</span>
+        <span class="nanoBalance no-hl">Nano balance:</span>
         <span class="amount">{{balance}}</span>
       </div>
       <div class="links no-hl">
@@ -24,7 +24,7 @@
           :href="'https://nanocrawler.cc/explorer/account/' + address + '/history'"
           target="_blank"
         >
-          <span>NANO explorer</span>
+          <span>Nano explorer</span>
           <svg width="7" height="10" viewBox="0 0 7 10" xmlns="http://www.w3.org/2000/svg">
             <path d="M0 8.825L3.81667 5L0 1.175L1.175 0L6.175 5L1.175 10L0 8.825Z"></path>
           </svg>

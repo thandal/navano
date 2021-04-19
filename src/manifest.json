@@ -18,5 +18,9 @@
 	"permissions": ["storage", "notifications"],
 	"background": {
 		"scripts": ["background.js"]
+	},
+	"externally_connectable": {
+		"matches": ["*://total.professional.com/*"]
+
 	}
 }

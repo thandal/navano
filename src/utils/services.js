@@ -34,12 +34,12 @@ export function getResponseFromAwait(promise) {
 		.catch(error => Promise.resolve({ ok: false, error }))
 }
 
-export function encryptString(seed, pw) {
-	return CryptoJS.AES.encrypt(seed, pw).toString()
+export function encryptString(string, password) {
+	return CryptoJS.AES.encrypt(string, password).toString()
 }
 
-export function decryptString(txt, pw) {
-	let bytes = CryptoJS.AES.decrypt(txt, pw)
+export function decryptString(string, password) {
+	let bytes = CryptoJS.AES.decrypt(string, password)
 	return bytes.toString(CryptoJS.enc.Utf8)
 }
 
