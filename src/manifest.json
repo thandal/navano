@@ -9,12 +9,6 @@
 		"default_title": "Navano",
 		"default_popup": "popup/popup.html"
 	},
-	"content_scripts": [
-		{
-			"matches": ["https://*/*", "http://*/*"],
-			"js": ["content.js"]
-		}
-	],
 	"permissions": ["storage", "notifications"],
 	"background": {
 		"scripts": ["background.js"]

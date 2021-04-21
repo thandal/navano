@@ -17,11 +17,9 @@ const API_URL = "http://localhost:17076"
 
 export class Wallet {
   constructor() {
-    console.log("ZZZ WALLET CONSTRUCTOR")
     this.port = false
     this.locked = true
     this.openWalletView = false
-    this.openDeepView = false
     this.isViewProcessing = false
     this.balance = new BigNumber(0)
 
@@ -29,7 +27,6 @@ export class Wallet {
     this.newTransactions$ = new BehaviorSubject(null)
     this.isSending = false
     this.isChangingRep = false
-    this.isDeepSending = false
     this.keepAliveSet = false
     this.offline = true
     this.reconnectTimeout = 5 * 1000
@@ -41,83 +38,8 @@ export class Wallet {
     this.successfullBlocks = []
     this.sendHash = ""
     this.confirmSend = false
-    this.deeplinkData = {} // amount in raw, mNANO, address
   }
 
-  setDeepLinkData(amount, to) {
-    this.deeplinkData = {
-      raw: new BigNumber(amount),
-      to: to,
-      raw: amount
-    }
-  }
-
-  resetDeepLink() {
-    if (this.openDeepView) {
-      this.sendToView("failure", "failure")
-    }
-    this.isDeepSending = false
-  }
-
-  async deepSend(port, data) {
-    this.port = port
-
-    if (this.offline) {
-      if (this.openDeepView) {
-        this.sendToView("errorMessage", "You are disconnected")
-      }
-      return
-    }
-
-    if (!data.confirmed) {
-      this.checkSend(data)
-      return
-    }
-
-    this.isDeepSending = true
-
-    try {
-      if (this.openDeepView) {
-        this.sendToView("generating", "")
-      }
-      const work = (await this.getWork(this.frontier, true, true)) || false
-      if (!work) {
-        console.log("1/ Error generating PoW")
-        this.resetDeepLink()
-        return
-      }
-
-      let block = this.newSendBlock({ data }, work[0])
-      this.pushBlock(block)
-        .then(response => {
-          if (response.hash) {
-            setTimeout(() => {
-              if (this.openDeepView) {
-                this.sendToView("success", response.hash)
-              }
-
-              this.frontier = response.hash
-              this.getNewWorkPool()
-            }, 500)
-            // timeOut against spam
-            setTimeout(() => {
-              this.isDeepSending = false
-            }, 5000)
-          } else {
-            console.log("2/ Pushblock error", response)
-            this.resetDeepLink()
-            this.isDeepSending = false
-          }
-        })
-        .catch(err => {
-          console.log("2/ Pushblock error", err)
-          this.resetDeepLink()
-        })
-    } catch (err) {
-      console.log("3/ Sending error:", err)
-      this.resetDeepLink()
-    }
-  }
   // BACKGROUND.JS STARTUP & OPENVIEW FUNCTIONS
   // ==================================================================
   async init() {
@@ -161,30 +83,6 @@ export class Wallet {
     this.connect()
   }
 
-  async setupWalletInfo(data) {
-    this.balance = new BigNumber(data.balance)
-    this.frontier = data.frontier
-    this.representative = data.representative
-    this.history = data.history
-//    this.pendingBlocks = this.setPendingBlock(data.pending)
-    this.hasChanged = false
-  }
-
-//  setPendingBlock(data) {
-//    if (!Object.keys(data).length) return []
-//    let result = []
-//    for (var key in data) {
-//      if (data.hasOwnProperty(key)) {
-//        result.push({
-//          amount: data[key].amount,
-//          account: data[key].source,
-//          hash: key
-//        })
-//      }
-//    }
-//    return result
-//  }
-
   forceDisconnect() {
     this.forcedLock = true
     this.updateView()
@@ -200,30 +98,125 @@ export class Wallet {
     }
   }
 
-  async getWalletUpdate() {
-    let requestAccountInformation = await 
-      this.sendAPIRequest({action: "account_info", account: this.account.address});
+  connectionProblem() {
+    this.offline = true
+    this.checkOffline()
+    this.socket.ws.onclose = msg => {}
+    this.socket.ws.onerror = msg => {}
+    this.socket.ws.close()
+    delete this.socket.ws
+    this.socket.connected = false
+    setTimeout(() => this.attemptReconnect(), this.reconnectTimeout)
+  }
 
-    if (!requestAccountInformation.ok) {
-      this.offline = true
-      this.checkOffline()
-      this.socket.ws.onclose = msg => {}
-      this.socket.ws.onerror = msg => {}
-      this.socket.ws.close()
-      delete this.socket.ws
-      this.socket.connected = false
-      setTimeout(() => this.attemptReconnect(), this.reconnectTimeout)
+  async getAccountInfo() {
+    let request = await this.sendAPIRequest({
+        action: "account_info",
+        account: this.account.address,
+        representative: 'true',
+        pending: 'true',
+      });
+
+    if (!request.ok) {
+      connectionProblem();
       return
     }
 
-    if (requestAccountInformation.response.error == "Account not found") {
+    if (request.response.error)
+      console.log("getAccountInfo error", request.response.error);
+
+    if (request.response.error == "Account not found") {
       this.offline = false
       this.checkOffline()
       console.log("ZZZ Account not found!")
       return
     }
 
-    this.setupWalletInfo(requestAccountInformation.response)
+    const data = request.response;
+    console.log("getAccountInfo", data);
+    this.balance = new BigNumber(data.balance)
+    this.frontier = data.frontier
+    this.representative = data.representative
+
+    this.checkIcon()
+    if (["import", "locked"].includes(this.page)) this.toPage("dashboard")
+    this.getNewWorkPool()
+    this.offline = false
+    this.updateView()
+    this.checkOffline()
+    this.reconnectTimeout = 5 * 1000
+  }
+
+  async getAccountHistory() {
+    let request = await this.sendAPIRequest({
+        action: "account_history",
+        account: this.account.address,
+        count: "-1",
+      });
+
+    if (!request.ok) {
+      connectionProblem();
+      return;
+    }
+
+    if (request.response.error)
+      console.log("getAccountHistory error", request.response.error);
+
+    if (request.response.error == "Account not found") {
+      this.offline = false;
+      this.checkOffline();
+      return
+    }
+
+    const data = request.response;
+    console.log("getAccountHistory", data);
+    this.history = data.history
+
+    this.checkIcon()
+    if (["import", "locked"].includes(this.page)) this.toPage("dashboard")
+    this.getNewWorkPool()
+    this.offline = false
+    this.updateView()
+    this.checkOffline()
+    this.reconnectTimeout = 5 * 1000
+  }
+
+  async getAccountPending() {
+    let request = await this.sendAPIRequest({
+        action: "accounts_pending",
+        accounts: [this.account.address],
+        count: "-1",
+        include_only_confirmed: "true",
+        source: "true"
+      });
+
+    if (!request.ok) {
+      connectionProblem();
+      return;
+    }
+
+    if (request.response.error)
+      console.log("getAccountPending error", request.response.error);
+
+    if (request.response.error == "Account not found") {
+      this.offline = false;
+      this.checkOffline();
+      return
+    }
+
+    const data = request.response;
+    this.pendingBlocks = []
+    if (this.account.address in data.blocks) {
+      const pending = data.blocks[this.account.address];
+      for (const block in pending) {
+        this.pendingBlocks.push({
+          amount: pending[block].amount,
+          account: pending[block].source,
+          hash: block
+        })
+      }
+    }
+
     this.checkIcon()
     if (["import", "locked"].includes(this.page)) this.toPage("dashboard")
     this.getNewWorkPool()
@@ -253,7 +246,9 @@ export class Wallet {
         this.keepAlive()
       }
 
-      this.getWalletUpdate()
+      this.getAccountInfo()
+      this.getAccountHistory()
+      this.getAccountPending()
     }
 
     ws.onerror = msg => {
@@ -808,7 +803,7 @@ export class Wallet {
   }
 
   checkOffline() {
-    if (this.openDeepView || this.openPopup) {
+    if (this.openPopup) {
       if (!this.locked) {
         this.sendToView("isOffline", this.offline)
         if (this.offline) {
@@ -895,7 +890,6 @@ export class Wallet {
     this.successfullBlocks = []
     this.sendHash = ""
     this.confirmSend = false
-    this.deeplinkData = {} // amount in raw, mNANO, address
     this.keepAliveSet = false
     this.successfullBlocks = []
     this.pendingBlocks = []
@@ -972,7 +966,6 @@ export class Wallet {
     if (
       this.isSending ||
       this.isChangingRep ||
-      this.isDeepSending ||
       this.isGenerating
     ) {
       errorMessage = "Cooling down... try again in a few seconds"
@@ -982,21 +975,15 @@ export class Wallet {
       return false
     }
 
-    if (this.openDeepView) {
-      this.sendToView("confirm", true)
-    } else {
-      this.confirmSend = true
-      this.updateView()
-      return true
-    }
+    this.confirmSend = true
+    this.updateView()
+    return true
   }
 
   updateView() {
     let result = []
     if (!this.offline) {
       if (this.pendingBlocks) {
-        console.log('PENDING');
-        console.dir(pending);
         this.pendingBlocks.forEach(element => {
           let block = {
             type: "pending",
@@ -1009,8 +996,6 @@ export class Wallet {
       }
 
       if (this.history) {
-        console.log('HISTORY');
-        console.dir(history);
         this.history.forEach(element => {
           let block = {
             type: element.type,
@@ -1040,7 +1025,6 @@ export class Wallet {
         isGenerating: this.isGenerating,
         isSending: this.isSending,
         isConfirm: this.confirmSend,
-        isDeepSending: this.isDeepSending,
         signature: this.signature,
         offline: this.offline
       }
@@ -1059,7 +1043,6 @@ export class Wallet {
         isGenerating: this.isGenerating,
         isSending: this.isSending,
         isConfirm: this.confirmSend,
-        isDeepSending: this.isDeepSending,
         signature: this.signature,
         offline: true
       })
@@ -1069,7 +1052,7 @@ export class Wallet {
   // BASIC UTILITY FUNCTIONS
   // ==================================================================
   sendToView(action, data) {
-    if (this.openWalletView || this.openDeepView)
+    if (this.openWalletView)
       this.port.postMessage({ action, data })
   }
 
