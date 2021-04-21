@@ -1,7 +1,7 @@
 import * as CryptoJS from "crypto-js"
 //import * as blake from "blakejs"
 //import "./nacl.js"
-//import { BigNumber } from "bignumber.js"
+import { BigNumber } from "bignumber.js"
 
 export function getLocalStorageItem(key) {
 	return new Promise((resolve, reject) => {
@@ -254,38 +254,38 @@ export function decryptString(string, password) {
 //
 //	return uint4ToHex(key_uint4)
 //}
-//
-///**
-// * Conversion functions
-// */
-//export const mnano = 1000000000000000000000000000000
-//export const knano = 1000000000000000000000000000
-//export const nano = 1000000000000000000000000
-//export function mnanoToRaw(value) {
-//	BigNumber.config({ EXPONENTIAL_AT: 100 })
-//	return new BigNumber(value).times(mnano)
-//}
-//export function knanoToRaw(value) {
-//	BigNumber.config({ EXPONENTIAL_AT: 100 })
-//	return new BigNumber(value).times(knano)
-//}
-//export function nanoToRaw(value) {
-//	BigNumber.config({ EXPONENTIAL_AT: 100 })
-//	return new BigNumber(value).times(nano)
-//}
-//export function rawToMnano(value) {
-//	BigNumber.config({ EXPONENTIAL_AT: 100, DECIMAL_PLACES: 30 })
-//	return new BigNumber(value).div(mnano)
-//}
-//export function rawToKnano(value) {
-//	BigNumber.config({ EXPONENTIAL_AT: 100 })
-//	return new BigNumber(value).div(knano)
-//}
-//export function rawToNano(value) {
-//	BigNumber.config({ EXPONENTIAL_AT: 100 })
-//	return new BigNumber(value).div(nano)
-//}
-//
+
+/**
+ * Conversion functions
+ */
+export const mnano = 1000000000000000000000000000000
+export const knano = 1000000000000000000000000000
+export const nano = 1000000000000000000000000
+export function mnanoToRaw(value) {
+	BigNumber.config({ EXPONENTIAL_AT: 100 })
+	return new BigNumber(value).times(mnano)
+}
+export function knanoToRaw(value) {
+	BigNumber.config({ EXPONENTIAL_AT: 100 })
+	return new BigNumber(value).times(knano)
+}
+export function nanoToRaw(value) {
+	BigNumber.config({ EXPONENTIAL_AT: 100 })
+	return new BigNumber(value).times(nano)
+}
+export function rawToMnano(value) {
+	BigNumber.config({ EXPONENTIAL_AT: 100, DECIMAL_PLACES: 30 })
+	return new BigNumber(value).div(mnano)
+}
+export function rawToKnano(value) {
+	BigNumber.config({ EXPONENTIAL_AT: 100 })
+	return new BigNumber(value).div(knano)
+}
+export function rawToNano(value) {
+	BigNumber.config({ EXPONENTIAL_AT: 100 })
+	return new BigNumber(value).div(nano)
+}
+
 //export function array_crop(array) {
 //	var length = array.length - 1
 //	var cropped_array = new Uint8Array(length)

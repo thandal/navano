@@ -1,15 +1,14 @@
 import * as util from "./utils/services.js"
 import { BehaviorSubject } from "rxjs"
 import { BigNumber } from "bignumber.js"
-import axios from "axios"
 import "./pow/nano-webgl-pow.js"
 import * as startThreads from "./pow/startThreads.js"
 import * as DOMPurify from "dompurify"
 import { wallet, tools } from "nanocurrency-web"
 
 //const WS_URL = "wss://socket.nanos.cc"
-const WS_URL = "wss://ws.mynano.ninja"
-//const WS_URL = "wss://localhost:17078"
+//const WS_URL = "wss://ws.mynano.ninja"
+const WS_URL = "ws://localhost:17078"
 
 //const API_URL = "https://proxy.nanos.cc/proxy"
 //const API_URL = "https://vox.nanos.cc/api"
@@ -152,7 +151,6 @@ export class Wallet {
     if (!/[0-9A-Fa-f]{128}/g.test(seed)) return
     let w = wallet.fromSeed(seed);
     this.account = w.accounts[0];
-    console.log('account', this.account);
 
     this.workPool = (await util.getLocalStorageItem("work")) || false // {work, hash} from frontier
 
@@ -164,8 +162,6 @@ export class Wallet {
   }
 
   async setupWalletInfo(data) {
-    console.log("ZZZ setupWalletInfo")
-    console.dir(data)
     this.balance = new BigNumber(data.balance)
     this.frontier = data.frontier
     this.representative = data.representative
@@ -205,11 +201,8 @@ export class Wallet {
   }
 
   async getWalletUpdate() {
-    console.log("ZZZ getWalletUpdate")
-    let requestAccountInformation = await util.getResponseFromAwait(
-      this.sendAPIRequest({action: "account_info", account: this.account.address})
-    );
-    console.dir(requestAccountInformation)
+    let requestAccountInformation = await 
+      this.sendAPIRequest({action: "account_info", account: this.account.address});
 
     if (!requestAccountInformation.ok) {
       this.offline = true
@@ -223,14 +216,14 @@ export class Wallet {
       return
     }
 
-    if (requestAccountInformation.data.data.error == "Account not found") {
+    if (requestAccountInformation.response.error == "Account not found") {
       this.offline = false
       this.checkOffline()
       console.log("ZZZ Account not found!")
       return
     }
 
-    this.setupWalletInfo(requestAccountInformation.data.data)
+    this.setupWalletInfo(requestAccountInformation.response)
     this.checkIcon()
     if (["import", "locked"].includes(this.page)) this.toPage("dashboard")
     this.getNewWorkPool()
@@ -241,7 +234,6 @@ export class Wallet {
   }
 
   connect() {
-    console.log("ZZZ CONNECT")
     if ((this.socket.connected && this.socket.ws) || this.forcedLock) {
       return
     }
@@ -425,16 +417,14 @@ export class Wallet {
     }
 
     if (useServer) {
-      let gotWorkResponse = await util.getResponseFromAwait(
-        this.sendAPIRequest("generate_work", {
+      let gotWorkResponse = await this.sendAPIRequest("generate_work", {
           account: this.account.address,
           hash: hashWork
-        })
-      )
+        });
       if (gotWorkResponse.ok) {
         this.isGenerating = false
         this.updateView()
-        return [gotWorkResponse.data.data.work, gotWorkResponse.data.data.hash] // [work, hash]
+        return [gotWorkResponse.response.work, gotWorkResponse.response.hash] // [work, hash]
       }
     }
 
@@ -470,7 +460,7 @@ export class Wallet {
 
     if (this.workPool.hash === checkHash && this.workPool.work) return
     if (!this.workPool || typeof this.workPool !== "object") this.workPool = {}
-    const work = (await this.getWork(this.frontier, true, false)) || false
+    const work = (await this.getWork(this.frontier, /*useServer=*/true, /*checkPool=*/false)) || false
     if (!work) {
       console.log("1/ Error generating background-PoW")
       return
@@ -957,7 +947,8 @@ export class Wallet {
   }
 
   checkSend(data) {
-    let amount = new BigNumber(data.amount); //util.mnanoToRaw(data.amount))
+    let amount = new BigNumber(util.mnanoToRaw(data.amount));
+    console.log("amount", amount);
     let to = data.to
     let errorMessage = false
     if (amount.e < 0) errorMessage = "Your nano-unit is too small to send"
@@ -967,7 +958,7 @@ export class Wallet {
     if (/^\d+\.\d+$/.test(amount.toString()))
       errorMessage = "Cannot send smaller than raw"
     if (amount.isGreaterThan(this.balance))
-      errorMessage = "Not enough NANO in this wallet"
+      errorMessage = "Not enough Mnano in this wallet"
 //    if (!util.checksumAccount(to)) errorMessage = "Invalid address"
     if (to === this.account.address) errorMessage = "Can't send to yourself"
     if (this.isViewProcessing)
@@ -1009,7 +1000,7 @@ export class Wallet {
         this.pendingBlocks.forEach(element => {
           let block = {
             type: "pending",
-            amount: element.amount, //util.rawToMnano(element.amount).toString(),
+            amount: util.rawToMnano(element.amount).toString(),
             account: element.account,
             hash: element.hash
           }
@@ -1023,7 +1014,7 @@ export class Wallet {
         this.history.forEach(element => {
           let block = {
             type: element.type,
-            amount: element.amount, //util.rawToMnano(element.amount).toString(),
+            amount: util.rawToMnano(element.amount).toString(),
             account: element.account,
             hash: element.hash
           }
@@ -1031,7 +1022,7 @@ export class Wallet {
         })
       }
 
-      let full_balance = this.balance; // util.rawToMnano(this.balance).toString()
+      let full_balance = util.rawToMnano(this.balance).toString();
       let prep_balance = full_balance.toString().slice(0, 8)
       if (prep_balance === "0") {
         prep_balance = "0.00"
@@ -1083,19 +1074,10 @@ export class Wallet {
   }
 
   sendAPIRequest(data) {
-    return new Promise(function(resolved, rejected) {
-      axios({
-        method: "post",
-        url: API_URL,
-        data: data,
-      })
-        .then(result => {
-          resolved(result)
-        })
-        .catch(function(err) {
-          rejected(err)
-        })
-    })
+    return fetch(API_URL, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(data)})
+    .then(response => response.json())
+    .then(response => ({ok: true, response}))
+    .catch(error => Promise.resolve({ok: false, error}));
   }
 
   checkIcon() {

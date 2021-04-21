@@ -9,7 +9,7 @@
     <div class="overview no-hl" v-if="!confirmScreen">
       <div class="sendingAmount">
         <div class="amount">
-          <span>Amount:</span>
+          <span>Amount (in Mnano):</span>
           <a class="max" @click="maxAmount()">MAX</a>
           <input type="text" class="nanoAmount" v-model="amount" placeholder="0">
         </div>
@@ -32,7 +32,7 @@
     </div>
     <div class="overview confirmScreen" v-else>
       <p>You are sending</p>
-      <div class="amount">{{amount}}</div>
+      <div class="amount">{{amount}} NANO</div>
       <p>to</p>
       <div class="address container">{{to_address}}</div>
     </div>
@@ -120,7 +120,7 @@ export default {
       if (this.confirmScreen) {
         return "Confirm";
       }
-      return "Send Nano";
+      return "Send NANO";
     }
   },
   watch: {
