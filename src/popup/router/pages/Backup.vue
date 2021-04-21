@@ -24,7 +24,7 @@
       </div>
       <div class="overlay" v-if="showTheSeed">
         <div class="seed">{{ showTheSeed }}</div>
-        <button @click="closeShow" class="closeSeed">close</button>
+        <button @click="closeShow" class="closeSeed">Close</button>
       </div>
     </div>
   </div>
@@ -43,9 +43,6 @@ export default {
   name: "backup",
   data() {
     return {
-      old_pw: "",
-      new_pw: "",
-      re_pw: "",
       show_pw: "",
       checked: false,
       showTheSeed: false
@@ -63,50 +60,10 @@ export default {
       this.$refs.label.classList.add("errorMessage");
     },
 
-    async changePw() {
-      let encryptedSeed = (await getLocalStorageItem("seed")) || false;
-      if (!encryptedSeed) toPage("welcome");
-
-      this.$refs.old_pw.classList.remove("error");
-      this.$refs.new_pw.classList.remove("error");
-      this.$refs.re_pw.classList.remove("error");
-
-      try {
-        let seed = decryptString(encryptedSeed, this.old_pw);
-
-        if (!/[0-9A-Fa-f]{64}/g.test(seed) || this.old_pw.length < 2) {
-          this.$refs.old_pw.classList.add("error");
-          return;
-        }
-
-        if (this.new_pw.length < 2) {
-          this.$refs.new_pw.classList.add("error");
-          return;
-        }
-        if (this.re_pw.length < 2) {
-          this.$refs.re_pw.classList.add("error");
-          return;
-        }
-        if (this.new_pw !== this.re_pw) {
-          this.$refs.re_pw.classList.add("error");
-          return;
-        }
-
-        let newEncryptedSeed = encryptString(seed, this.new_pw);
-        await setLocalStorageItem("seed", newEncryptedSeed);
-        this.$bus.postMessage({ action: "lockWallet" });
-      } catch (err) {
-        console.log(err);
-        this.$refs.old_pw.classList.add("error");
-        return;
-      }
-    },
-
     async showSeed() {
       this.$refs.show_pw.classList.remove("error");
 
-      let encryptedSeed = (await getLocalStorageItem("seed")) || false;
-      if (!encryptedSeed) toPage("welcome");
+      let encryptedSeed = (await getLocalStorageItem("encryptedSeed")) || false;
       try {
         let seed = decryptString(encryptedSeed, this.show_pw);
 

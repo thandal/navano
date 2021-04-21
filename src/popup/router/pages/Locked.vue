@@ -23,6 +23,7 @@
 
     <div class="pwArea">
       <input
+        autofocus
         type="password"
         class="pw"
         v-model="pw_unlock"

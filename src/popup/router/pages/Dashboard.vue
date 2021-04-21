@@ -42,6 +42,7 @@
 
 <script>
 import navigation from "../navigation.js";
+
 export default {
   name: "dashboard",
   data() {
@@ -191,20 +192,6 @@ h1 {
   width: 100%;
   display: flex;
   flex-grow: 1;
-
-  button:first-child {
-    background-color: #2f55df;
-    &:hover {
-      background-color: #1c3693;
-    }
-  }
-
-  button:last-child {
-    background-color: #1e3fba;
-    &:hover {
-      background-color: #1c3693;
-    }
-  }
 
   button {
     height: 50px;

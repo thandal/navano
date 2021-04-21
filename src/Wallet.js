@@ -24,17 +24,19 @@ export class Wallet {
     this.openWalletView = false
     this.openDeepView = false
     this.isViewProcessing = false
+    this.balance = new BigNumber(0)
 
     this.socket = { ws: null, connected: false }
     this.newTransactions$ = new BehaviorSubject(null)
     this.isSending = false
-    this.isSigning = false
     this.isChangingRep = false
     this.isDeepSending = false
     this.keepAliveSet = false
     this.offline = true
     this.reconnectTimeout = 5 * 1000
     this.keepaliveTimeout = 30 * 1000
+
+    this.signature = ""
 
     this.isProcessing = false
     this.successfullBlocks = []
@@ -147,12 +149,10 @@ export class Wallet {
   // WALLET SETUP; IMPORT, DELETE, LOCK, ETC.
   // ==================================================================
   async setupWallet(seed) {
-    console.log("ZZZ setupWallet")
     if (!/[0-9A-Fa-f]{128}/g.test(seed)) return
     let w = wallet.fromSeed(seed);
-    console.dir(w);
     this.account = w.accounts[0];
-    console.dir(this.account)
+    console.log('account', this.account);
 
     this.workPool = (await util.getLocalStorageItem("work")) || false // {work, hash} from frontier
 
@@ -772,12 +772,18 @@ export class Wallet {
     this.changeRepresentative(data)
   }
   // TODO: CHANGE BLOCK
+  //
+
+  signMessage(message) {
+    console.log("signing " + message);
+    let signature = this.locked ? "locked" : tools.signMessage(this.account.privateKey, message);
+    console.log("signature " + signature);
+    return signature;
+  }
   
   sign(data) {
-    const message = data.message
-    console.log("signing " + message);
-    const signature = tools.sign(this.account.privateKey, message);
-    console.log("signature " + signature);
+    this.signature = signMessage(data.message);
+    this.updateView()
   }
 
   // FUNCTIONS TO INTERACT WITH THE WALLET VIEW
@@ -951,7 +957,7 @@ export class Wallet {
   }
 
   checkSend(data) {
-    let amount = new BigNumber(util.mnanoToRaw(data.amount))
+    let amount = new BigNumber(data.amount); //util.mnanoToRaw(data.amount))
     let to = data.to
     let errorMessage = false
     if (amount.e < 0) errorMessage = "Your nano-unit is too small to send"
@@ -1028,7 +1034,7 @@ export class Wallet {
       let full_balance = this.balance; // util.rawToMnano(this.balance).toString()
       let prep_balance = full_balance.toString().slice(0, 8)
       if (prep_balance === "0") {
-        prep_balance = "00.00"
+        prep_balance = "0.00"
       }
       let info = {
         balance: prep_balance,
@@ -1044,6 +1050,7 @@ export class Wallet {
         isSending: this.isSending,
         isConfirm: this.confirmSend,
         isDeepSending: this.isDeepSending,
+        signature: this.signature,
         offline: this.offline
       }
       this.sendToView("update", info)
@@ -1062,6 +1069,7 @@ export class Wallet {
         isSending: this.isSending,
         isConfirm: this.confirmSend,
         isDeepSending: this.isDeepSending,
+        signature: this.signature,
         offline: true
       })
     }

@@ -5,6 +5,7 @@
         <h1>Sign</h1>
       </div>
     </div>
+
     <div class="overview no-hl">
       <div class="message">
         <span class="address">Message</span>
@@ -13,7 +14,6 @@
           autocorrect="off"
           autocapitalize="off"
           spellcheck="false"
-          maxlength="65"
           type="text"
           placeholder="...message to sign"
           v-model="message"
@@ -21,11 +21,40 @@
       </div>
 
       <div class="errorMessage" v-if="errorMessage">{{errorMessage}}</div>
+
+      <div class="message">
+        <span class="address">Signature</span>
+        <textarea
+          autocomplete="off"
+          autocorrect="off"
+          autocapitalize="off"
+          spellcheck="false"
+          readonly="true"
+          type="text"
+          placeholder="...signature"
+          v-model="signature"
+        ></textarea>
+      </div>
     </div>
 
-    <button class="sign no-hl" @click="trySign()">
-      <span>Sign Message</span>
-    </button>
+    <div class="copyHolder">
+      <svg
+        width="14"
+        height="14"
+        viewBox="0 0 14 14"
+        class="copy"
+        xmlns="http://www.w3.org/2000/svg"
+        @click="copied()"
+      >
+        <path
+          d="M11.0833 12.25H4.66667V4.08334H11.0833V12.25ZM11.0833 2.91667H4.66667C4.35725 2.91667 4.06051 3.03959 3.84171 3.25838C3.62292 3.47717 3.50001 3.77392 3.50001 4.08334V12.25C3.50001 12.5594 3.62292 12.8562 3.84171 13.075C4.06051 13.2938 4.35725 13.4167 4.66667 13.4167H11.0833C11.3928 13.4167 11.6895 13.2938 11.9083 13.075C12.1271 12.8562 12.25 12.5594 12.25 12.25V4.08334C12.25 3.77392 12.1271 3.47717 11.9083 3.25838C11.6895 3.03959 11.3928 2.91667 11.0833 2.91667V2.91667ZM9.33334 0.583336H2.33334C2.02392 0.583336 1.72717 0.706252 1.50838 0.925045C1.28959 1.14384 1.16667 1.44058 1.16667 1.75V9.91667H2.33334V1.75H9.33334V0.583336Z"
+          fill="#222426"
+        ></path>
+      </svg>
+      <span class="copied" v-bind:class="{ show: copy_clicked }">COPIED!</span>
+    </div>
+
+    <button class="sign no-hl" @click="trySign()"> Sign Message </button>
   </div>
 </template>
 
@@ -36,7 +65,9 @@ export default {
   data() {
     return {
       message: "",
+      signature: "",
       errorMessage: false,
+      copy_clicked: false
     };
   },
 
@@ -53,6 +84,7 @@ export default {
 
       if (msg.action === "update") {
         // do something?
+        this.signature = msg.data.signature;
       }
     },
 
@@ -66,12 +98,21 @@ export default {
         this.errorMessage = "Message is empty";
         return;
       }
+      this.signature = '...signing';
 
       this.errorMessage = false;
       this.$bus.postMessage({
         action: "sign",
         data: { message: this.message }
       });
+    },
+
+    copied() {
+      this.$copyText(this.signature);
+      this.copy_clicked = true;
+      setTimeout(() => {
+        this.copy_clicked = false;
+      }, 400);
     }
   },
   mixins: [navigation]
@@ -79,13 +120,13 @@ export default {
 </script>
 
 <style lang="scss" scoped>
-.wallet {
-  background-color: #f7f7f7 !important;
-  height: 100%;
-}
-
 .header {
   height: 123px;
+}
+
+.overview {
+  padding: 5px 0 0 0;
+  background-color: #fff;
 }
 
 input[type="number"]::-webkit-inner-spin-button,
@@ -140,7 +181,7 @@ button {
     position: relative;
     top: 5px;
     width: 230px;
-    height: 52px;
+    height: 40px;
     white-space: pre-wrap;
     word-wrap: break-word;
     outline: none;
@@ -150,6 +191,41 @@ button {
       font-family: "RobotoMonoBold", sans-serif;
     }
   }
+}
+
+.copyHolder {
+  display: flex;
+  justify-content: center;
+  position: relative;
+  width: 280px;
+}
+
+.copy {
+  color: #222426;
+  cursor: pointer;
+  position: relative;
+  left: 15px;
+  padding: 5px;
+  border-radius: 100%;
+  &:hover {
+    background-color: #e6e6e6;
+  }
+}
+
+.copied {
+  visibility: hidden;
+  text-transform: uppercase;
+  font-family: "RubikMedium";
+  color: #42a07f;
+  transition: all 1s;
+  font-size: 11px;
+  position: relative;
+  left: 23px;
+  top: 6px;
+}
+
+.show {
+  visibility: visible;
 }
 
 input:focus::-webkit-input-placeholder,
@@ -180,39 +256,6 @@ textarea:focus::-webkit-input-placeholder {
 .max:hover {
   color: rgba(34, 36, 38, 1);
   cursor: pointer;
-}
-
-.confirmScreen {
-  background-color: #1f378d;
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  top: 123px; // header height
-
-  p {
-    font-family: "RubikMedium", sans-serif;
-    font-size: 13px;
-    line-height: 17px;
-    text-align: center;
-    color: rgba(255, 255, 255, 0.27);
-    margin: 0;
-  }
-
-  p:first-child {
-    padding-top: 30px;
-  }
-
-  .message {
-    font-family: "RobotoMonoBold", sans-serif;
-    font-size: 12px;
-    line-height: 15px;
-    text-align: center;
-    color: #ffffff;
-    width: 237px;
-    word-break: break-all;
-    padding-top: 5px;
-  }
 }
 
 h1 {
