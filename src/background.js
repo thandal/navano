@@ -41,7 +41,6 @@ function startExtension() {
           window.alert("Please unlock (or create) your Navano wallet")
           sendResponse({error : "locked"});
         } else {
-          console.log("TRYING TO SEND RESPONSE!", wallet.account.address);
           sendResponse({"address" : wallet.account.address});
         }
       }

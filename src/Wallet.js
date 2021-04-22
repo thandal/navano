@@ -444,7 +444,6 @@ export class Wallet {
 
   async getNewWorkPool() {
     let checkHash = this.frontier
-    console.log('getNewWorkPool', checkHash);
     if (checkHash === "0000000000000000000000000000000000000000000000000000000000000000") {
       checkHash = this.account.publicKey;
     }
