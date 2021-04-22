@@ -514,74 +514,40 @@ export class Wallet {
   }
 
   async send(data) {
-    // Checks should have been run during confirmation,
-    // but run 'em again!
+    // Checks should have been run during confirmation, but run 'em again!
     if (!this.checkSend(data)) return
 
     this.isSending = true
     this.isGenerating = true
     this.updateView()
 
-//    try {
-      const work = (await this.getWork(this.frontier, true, true)) || false
-      if (!work) {
-        console.log("1/ Error generating PoW")
-        this.resetConfirm()
-        this.toPage("failed")
-        return
-      }
+    const work = (await this.getWork(this.frontier, true, true)) || false
+    if (!work) {
+      console.log("1/ Error generating PoW")
+      this.resetConfirm()
+      this.toPage("failed")
+      return
+    }
 
-      let block = this.newSendBlock(data, work[0])
-      console.log('new send block', block);
-      let request = await this.processBlock(block);
-      console.log('new send request', request);
-      if (!request.ok) {
-        console.log("2/ Send error", request)
-        this.resetConfirm()
-        this.toPage("failed")
-      } else if (request.response.hash) {
-        setTimeout(() => {
-          this.sendHash = request.response.hash
-          this.toPage("success")
-          this.frontier = request.response.hash
-          this.getNewWorkPool()
-        }, 500);
-        // timeOut against spam
-        setTimeout(() => {
-          this.isSending = false
-          this.confirmSend = false
-        }, 5000);
-      }
-//      this.processBlock(block)
-//        .then(response => {
-//          if (response.hash) {
-//            setTimeout(() => {
-//              this.sendHash = response.hash
-//              this.toPage("success")
-//              this.frontier = response.hash
-//              this.getNewWorkPool()
-//            }, 500)
-//            // timeOut against spam
-//            setTimeout(() => {
-//              this.isSending = false
-//              this.confirmSend = false
-//            }, 5000)
-//          } else {
-//            console.log("2/ Pushblock error", response)
-//            this.resetConfirm()
-//            this.toPage("failed")
-//          }
-//        })
-//        .catch(err => {
-//          console.log("2/ Pushblock error", err)
-//          this.resetConfirm()
-//          this.toPage("failed")
-//        })
-//    } catch (err) {
-//      console.log("3/ Sending error:", err)
-//      this.resetConfirm()
-//      this.toPage("failed")
-//    }
+    let block = this.newSendBlock(data, work[0])
+    let request = await this.processBlock(block);
+    if (!request.ok) {
+      console.log("Send error", request)
+      this.resetConfirm()
+      this.toPage("failed")
+    } else if (request.response.hash) {
+      setTimeout(() => {
+        this.sendHash = request.response.hash
+        this.toPage("success")
+        this.frontier = request.response.hash
+        this.getNewWorkPool()
+      }, 500);
+      // timeOut against spam  [I think this is to prevent users from spamming?]
+      setTimeout(() => {
+        this.isSending = false
+        this.confirmSend = false
+      }, 5000);
+    }
   }
 
   async processPending() {
@@ -609,45 +575,36 @@ export class Wallet {
     }
 
     let block = this.newReceiveBlock(nextBlock, work[0])
-    this.processBlock(block)
-      .then(response => {
-        if (response.hash) {
-          if (this.successfulBlocks.length >= 15)
-            this.successfulBlocks.shift()
-          this.successfulBlocks.push(nextBlock.hash)
+    let request = await this.processBlock(block);
+    if (!request.ok) {
+      console.log("Receive error", request)
+      this.isProcessing = false
+      this.isViewProcessing = false
+      this.updateView()
+    } else if (request.response.hash) {
+      if (this.successfulBlocks.length >= 15)
+        this.successfulBlocks.shift()
+      this.successfulBlocks.push(nextBlock.hash)
 
-          let to_history = this.pendingBlocks.shift()
-          this.history.unshift({
-            type: "receive",
-            amount: to_history.amount,
-            account: to_history.account,
-            hash: to_history.hash
-          })
-
-          this.isProcessing = false
-          if (!this.pendingBlocks.length) {
-            this.isViewProcessing = false
-            this.updateView()
-            this.frontier = response.hash
-            this.getNewWorkPool()
-          } else {
-            setTimeout(() => this.processPending(), 1500)
-          }
-        } else {
-          console.log("2/ Error on server-side node")
-          this.isViewProcessing = false
-          this.isProcessing = false
-          this.updateView()
-          return
-        }
+      let to_history = this.pendingBlocks.shift()
+      this.history.unshift({
+        type: "receive",
+        amount: to_history.amount,
+        account: to_history.account,
+        hash: to_history.hash
       })
-      .catch(err => {
-        console.log("3/ Error on server-side node", err);
-        this.isProcessing = false
+
+      this.isProcessing = false
+      if (!this.pendingBlocks.length) {
         this.isViewProcessing = false
         this.updateView()
-        return
-      })
+        this.frontier = response.hash
+        this.getNewWorkPool()
+      } else {
+        // [Auto-process the next one... maybe should be a user choice?]
+        setTimeout(() => this.processPending(), 1500)
+      }
+    }
   }
 
   async changeRepresentative(data) {
@@ -681,44 +638,29 @@ export class Wallet {
     }
 
     this.isChangingRep = true
-    try {
-      const work = (await this.getWork(this.frontier, true, true)) || false
-      if (!work) {
-        this.isChangingRep = false
-        this.sendToView("errorMessage", "Something went wrong, try again")
-        this.updateView()
-        return
-      }
-
-      let block = this.newChangeBlock(newRep, work[0])
-      this.processBlock(block)
-        .then(response => {
-          if (response.hash) {
-            this.frontier = response.hash
-            this.sendToView("changedRep", newRep)
-            this.getNewWorkPool()
-
-            setTimeout(() => {
-              this.isChangingRep = false
-            }, 5000)
-          } else {
-            this.isChangingRep = false
-            this.sendToView("errorMessage", "Something went wrong, try again")
-            this.updateView()
-            return
-          }
-        })
-        .catch(err => {
-          this.isChangingRep = false
-          this.sendToView("errorMessage", "Something went wrong, try again")
-          this.updateView()
-          return
-        })
-    } catch (err) {
+    const work = (await this.getWork(this.frontier, true, true)) || false
+    if (!work) {
       this.isChangingRep = false
       this.sendToView("errorMessage", "Something went wrong, try again")
       this.updateView()
       return
+    }
+
+    let block = this.newChangeBlock(newRep, work[0])
+    let request = await this.processBlock(block);
+    if (!request.ok) {
+      console.log("Change error", request)
+      this.isChangingRep = false
+      this.sendToView("errorMessage", "Something went wrong, try again")
+      this.updateView()
+    } else if (request.response.hash) {
+      this.frontier = response.hash
+      this.sendToView("changedRep", newRep)
+      this.getNewWorkPool()
+      // timeOut against spam  [I think this is to prevent users from spamming?]
+      setTimeout(() => {
+        this.isChangingRep = false
+      }, 5000)
     }
   }
 
@@ -808,7 +750,7 @@ export class Wallet {
         const data = popupMsg.data
 
         if (action === "toPage") this.toPage(data)
-        if (action === "import") this.import(data)
+        if (action === "import") this.importSeed(data)
         if (action === "unlock") this.unlock(data)
         if (action === "lock") this.lock()
         if (action === "update") this.updateView()
@@ -909,7 +851,6 @@ export class Wallet {
     this.isViewProcessing = false
     this.isSending = false
     this.isChangingRep = false
-    this.successfulBlocks = []
     this.sendHash = ""
     this.confirmSend = false
     this.keepAliveSet = false
@@ -942,7 +883,7 @@ export class Wallet {
     )
   }
 
-  async import(data) {
+  async importSeed(data) {
     let seed = data.seed
     let pw = data.pw
     let re_pw = data.re_pw
@@ -960,7 +901,6 @@ export class Wallet {
     await util.setLocalStorageItem("encryptedSeed", util.encryptString(seed, pw));
     this.setupWallet(seed)
   }
-
 
   updateView() {
     let result = []
@@ -1043,6 +983,15 @@ export class Wallet {
     .then(response => response.json())
     .then(response => ({ok: response.error ? false : true, response}))
     .catch(error => Promise.resolve({ok: false, error}));
+  }
+
+  processBlock(block) {
+    return this.sendAPIRequest({
+      action: "process",
+      'json_block': true,
+      'watch_work': false,
+      block:block
+    })
   }
 
   checkIcon() {
@@ -1130,15 +1079,6 @@ export class Wallet {
     } catch (e) {
       return false
     }
-  }
-
-  processBlock(block) {
-    return this.sendAPIRequest({
-      action: "process",
-      'json_block': true,
-      'watch_work': false,
-      block:block
-    })
   }
 
   getPaddedBalance(rawAmount) {
