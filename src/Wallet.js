@@ -4,7 +4,7 @@ import { BigNumber } from "bignumber.js"
 import "./pow/nano-webgl-pow.js"
 import * as startThreads from "./pow/startThreads.js"
 import * as DOMPurify from "dompurify"
-import { wallet, tools } from "nanocurrency-web"
+import { block, wallet, tools } from "nanocurrency-web"
 
 //const WS_URL = "wss://socket.nanos.cc"
 //const WS_URL = "wss://ws.mynano.ninja"
@@ -133,7 +133,6 @@ export class Wallet {
     }
 
     const data = request.response;
-    console.log("getAccountInfo", data);
     this.balance = new BigNumber(data.balance)
     this.frontier = data.frontier
     this.representative = data.representative
@@ -169,7 +168,6 @@ export class Wallet {
     }
 
     const data = request.response;
-    console.log("getAccountHistory", data);
     this.history = data.history
 
     this.checkIcon()
@@ -550,6 +548,7 @@ export class Wallet {
     let block = this.newOpenBlock(nextBlock, work[0])
     this.pushBlock(block)
       .then(response => {
+        console.log('L>>>>>>>>>>>', response);
         if (response.hash) {
           if (this.successfullBlocks.length >= 15)
             this.successfullBlocks.shift()
@@ -581,7 +580,7 @@ export class Wallet {
         }
       })
       .catch(err => {
-        console.log("3/ Error on server-side node")
+        console.log("3/ Error on server-side node", err);
         this.isProcessing = false
         this.isViewProcessing = false
         this.updateView()
@@ -637,7 +636,7 @@ export class Wallet {
   }
 
   newChangeBlock(newRep, hasWork) {
-    console.log('NOT IMPLEMENTED');
+    console.log('NOT CHANGE IMPLEMENTED');
     //let newBalancePadded = this.getPaddedBalance(this.balance)
     //let link =
     //  "0000000000000000000000000000000000000000000000000000000000000000";
@@ -667,32 +666,27 @@ export class Wallet {
   }
 
   newOpenBlock(blockinfo, hasWork) {
-    console.log('NOT IMPLEMENTED');
-    //let amount = new BigNumber(blockinfo.amount)
-    //let newBalance = this.balance.plus(new BigNumber(amount))
-    //let newBalancePadded = this.getPaddedBalance(newBalance)
+    console.log('NOT OPEN IMPLEMENTED');
+    const data = {
+      // Your current balance in RAW
+      walletBalanceRaw: this.balance,
+      // Your address
+      toAddress: this.account.address,
+      // Representative from wallet info
+      representativeAddress: this.representative,
+      // Frontier from wallet info
+      frontier: this.frontier,
+      // From the pending transaction
+      transactionHash: blockinfo.hash,
+      // From the pending transaction in RAW
+      amountRaw: blockinfo.amount,
+      // Generate the work server-side or with a DPOW service
+      work: hasWork,
+    }
 
-    //let signature = util.signOpenBlock(
-    //  this.account.address,
-    //  this.frontier,
-    //  blockinfo.hash,
-    //  newBalancePadded,
-    //  this.representative,
-    //  this.account.privateKey
-    //)
-
-    //return {
-    //  type: "state",
-    //  account: this.account.address,
-    //  previous: this.frontier, //hex format
-    //  representative: this.representative,
-    //  destination: this.account.address,
-    //  balance: newBalance,
-    //  work: hasWork,
-    //  signature: signature,
-    //  linkHEX: blockinfo.hash,
-    //  link: blockinfo.hash
-    //}
+    const signedBlock = block.receive(data, this.account.privateKey);
+    console.log('signedBlock', signedBlock);
+    return signedBlock;
   }
 
   newSendBlock(blockinfo, hasWork) {
@@ -742,10 +736,10 @@ export class Wallet {
       this.sendToView("errorMessage", "Already voting for this reprentative")
       return
     }
-//    if (!util.checksumAccount(newRep)) {
-//      this.sendToView("errorMessage", "Not a valid address")
-//      return
-//    }
+    if (!util.checksumAccount(newRep)) {
+      this.sendToView("errorMessage", "Not a valid address")
+      return
+    }
     if (
       this.frontier ===
       "0000000000000000000000000000000000000000000000000000000000000000"
@@ -953,7 +947,7 @@ export class Wallet {
       errorMessage = "Cannot send smaller than raw"
     if (amount.isGreaterThan(this.balance))
       errorMessage = "Not enough Mnano in this wallet"
-//    if (!util.checksumAccount(to)) errorMessage = "Invalid address"
+    if (!util.checksumAccount(to)) errorMessage = "Invalid address"
     if (to === this.account.address) errorMessage = "Can't send to yourself"
     if (this.isViewProcessing)
       errorMessage = "Still processing pendingblocks..."
@@ -1150,10 +1144,11 @@ export class Wallet {
     }
   }
 
-  pushBlock(data) {
+  pushBlock(block) {
     return new Promise((resolved, rejected) => {
-      this.sendAPIRequest({action: "process", data:data})
+      this.sendAPIRequest({action: "process", 'json_block': true, block:block})
         .then(response => {
+          console.log("ReERROR", response)
           resolved(response.data.result)
         })
         .catch(err => {
