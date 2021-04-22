@@ -8,7 +8,7 @@
 
     <div class="overview">
       <div class="balance">
-        <span class="nanoBalance no-hl">Balance (Mnano):</span>
+        <span class="nanoBalance no-hl">Balance (NANO):</span>
         <span class="amount">{{balance}}</span>
       </div>
       <div class="links no-hl">

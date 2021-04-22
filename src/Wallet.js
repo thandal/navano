@@ -35,7 +35,7 @@ export class Wallet {
     this.signature = ""
 
     this.isProcessing = false
-    this.successfullBlocks = []
+    this.successfulBlocks = []
     this.sendHash = ""
     this.confirmSend = false
   }
@@ -43,9 +43,7 @@ export class Wallet {
   // BACKGROUND.JS STARTUP & OPENVIEW FUNCTIONS
   // ==================================================================
   async init() {
-    console.log("ZZZ INIT")
     let encryptedSeed = (await util.getLocalStorageItem("encryptedSeed")) || false
-    console.log("ZZZ encryptedSeed " + encryptedSeed)
     this.page = encryptedSeed ? "locked" : "welcome"
     if (encryptedSeed) {
       chrome.browserAction.setIcon({ path: "/icons/icon_128_locked.png" })
@@ -128,9 +126,10 @@ export class Wallet {
     if (request.response.error == "Account not found") {
       this.offline = false
       this.checkOffline()
-      console.log("ZZZ Account not found!")
       return
     }
+
+    console.log('########### ', request.response);
 
     const data = request.response;
     this.balance = new BigNumber(data.balance)
@@ -396,6 +395,7 @@ export class Wallet {
     if (hash === "0000000000000000000000000000000000000000000000000000000000000000") {
       hashWork = this.account.publicKey;
     }
+    console.log("<<<<  A", hashWork);
 
     if (checkPool) {
       // Check for local cached work
@@ -410,10 +410,12 @@ export class Wallet {
     }
 
     if (useServer) {
-      let gotWorkResponse = await this.sendAPIRequest("generate_work", {
-          account: this.account.address,
-          hash: hashWork
-        });
+      console.log("<<<<  B");
+      let gotWorkResponse = await this.sendAPIRequest({
+        action: "work_generate",
+        hash: hashWork
+      });
+      console.log("<<<<  C", gotWorkResponse);
       if (gotWorkResponse.ok) {
         this.isGenerating = false
         this.updateView()
@@ -447,6 +449,7 @@ export class Wallet {
 
   async getNewWorkPool() {
     let checkHash = this.frontier
+    console.log('getNewWorkPool', checkHash);
     if (checkHash === "0000000000000000000000000000000000000000000000000000000000000000") {
       checkHash = this.account.publicKey;
     }
@@ -472,14 +475,54 @@ export class Wallet {
     this.updateView()
   }
 
-  async send(raw_data) {
-    if (!this.checkSend(raw_data)) return
+  checkSend(data) {
+    let amount = new BigNumber(util.mnanoToRaw(data.amount));
+    let to = data.to
+    let errorMessage = false
+    if (amount.e < 0) errorMessage = "Your nano-unit is too small to send"
+    if (amount.isNaN()) errorMessage = "Amount is not a valid number"
+    if (amount.isLessThanOrEqualTo(0))
+      errorMessage = "You can't send zero or negative NANO"
+    if (/^\d+\.\d+$/.test(amount.toString()))
+      errorMessage = "Cannot send smaller than raw"
+    if (amount.isGreaterThan(this.balance))
+      errorMessage = "Not enough Mnano in this wallet"
+    if (!tools.validateAddress(to)) errorMessage = "Invalid address"
+    if (to === this.account.address) errorMessage = "Can't send to yourself"
+    if (this.isViewProcessing)
+      errorMessage = "Still processing pendingblocks..."
+    if (
+      this.frontier === "0000000000000000000000000000000000000000000000000000000000000000"
+    ) {
+      errorMessage = "This account has nothing received yet"
+    }
+    if (
+      this.isSending ||
+      this.isChangingRep ||
+      this.isGenerating
+    ) {
+      errorMessage = "Cooling down... try again in a few seconds"
+    }
+    if (errorMessage) {
+      this.sendToView("errorMessage", errorMessage)
+      return false
+    }
+
+    this.confirmSend = true
+    this.updateView()
+    return true
+  }
+
+  async send(data) {
+    // Checks should have been run during confirmation,
+    // but run 'em again!
+    if (!this.checkSend(data)) return
 
     this.isSending = true
     this.isGenerating = true
     this.updateView()
 
-    try {
+//    try {
       const work = (await this.getWork(this.frontier, true, true)) || false
       if (!work) {
         console.log("1/ Error generating PoW")
@@ -488,37 +531,57 @@ export class Wallet {
         return
       }
 
-      let block = this.newSendBlock({ data: raw_data }, work[0])
-      this.pushBlock(block)
-        .then(response => {
-          if (response.hash) {
-            setTimeout(() => {
-              this.sendHash = response.hash
-              this.toPage("success")
-              this.frontier = response.hash
-              this.getNewWorkPool()
-            }, 500)
-            // timeOut against spam
-            setTimeout(() => {
-              this.isSending = false
-              this.confirmSend = false
-            }, 5000)
-          } else {
-            console.log("2/ Pushblock error", response)
-            this.resetConfirm()
-            this.toPage("failed")
-          }
-        })
-        .catch(err => {
-          console.log("2/ Pushblock error", err)
-          this.resetConfirm()
-          this.toPage("failed")
-        })
-    } catch (err) {
-      console.log("3/ Sending error:", err)
-      this.resetConfirm()
-      this.toPage("failed")
-    }
+      let block = this.newSendBlock(data, work[0])
+      console.log('new send block', block);
+      let request = await this.processBlock(block);
+      console.log('new send request', request);
+      if (!request.ok) {
+        console.log("2/ Send error", request)
+        this.resetConfirm()
+        this.toPage("failed")
+      } else if (request.response.hash) {
+        setTimeout(() => {
+          this.sendHash = request.response.hash
+          this.toPage("success")
+          this.frontier = request.response.hash
+          this.getNewWorkPool()
+        }, 500);
+        // timeOut against spam
+        setTimeout(() => {
+          this.isSending = false
+          this.confirmSend = false
+        }, 5000);
+      }
+//      this.processBlock(block)
+//        .then(response => {
+//          if (response.hash) {
+//            setTimeout(() => {
+//              this.sendHash = response.hash
+//              this.toPage("success")
+//              this.frontier = response.hash
+//              this.getNewWorkPool()
+//            }, 500)
+//            // timeOut against spam
+//            setTimeout(() => {
+//              this.isSending = false
+//              this.confirmSend = false
+//            }, 5000)
+//          } else {
+//            console.log("2/ Pushblock error", response)
+//            this.resetConfirm()
+//            this.toPage("failed")
+//          }
+//        })
+//        .catch(err => {
+//          console.log("2/ Pushblock error", err)
+//          this.resetConfirm()
+//          this.toPage("failed")
+//        })
+//    } catch (err) {
+//      console.log("3/ Sending error:", err)
+//      this.resetConfirm()
+//      this.toPage("failed")
+//    }
   }
 
   async processPending() {
@@ -531,7 +594,7 @@ export class Wallet {
 
     this.isProcessing = true
     const nextBlock = this.pendingBlocks[0]
-    if (this.successfullBlocks.find(b => b.hash == nextBlock.hash)) {
+    if (this.successfulBlocks.find(b => b.hash == nextBlock.hash)) {
       return setTimeout(() => this.processPending(), 1500)
     }
 
@@ -545,14 +608,13 @@ export class Wallet {
       return
     }
 
-    let block = this.newOpenBlock(nextBlock, work[0])
-    this.pushBlock(block)
+    let block = this.newReceiveBlock(nextBlock, work[0])
+    this.processBlock(block)
       .then(response => {
-        console.log('L>>>>>>>>>>>', response);
         if (response.hash) {
-          if (this.successfullBlocks.length >= 15)
-            this.successfullBlocks.shift()
-          this.successfullBlocks.push(nextBlock.hash)
+          if (this.successfulBlocks.length >= 15)
+            this.successfulBlocks.shift()
+          this.successfulBlocks.push(nextBlock.hash)
 
           let to_history = this.pendingBlocks.shift()
           this.history.unshift({
@@ -588,11 +650,36 @@ export class Wallet {
       })
   }
 
-  async changeRepresentative(new_rep) {
+  async changeRepresentative(data) {
+    let newRep = data.trim()
     if (this.isChangingRep) {
       this.sendToView("errorMessage", "Changing too often, wait a few seconds")
       return
     }
+    if (newRep === "") {
+      this.sendToView("errorMessage", "Empty address-field")
+      return
+    }
+    if (this.isProcessing || this.isSending) {
+      this.sendToView("errorMessage", "Currently processing pending..")
+      return
+    }
+    if (newRep === this.representative) {
+      this.sendToView("errorMessage", "Already voting for this reprentative")
+      return
+    }
+    if (!tools.validateAddress(newRep)) {
+      this.sendToView("errorMessage", "Not a valid address")
+      return
+    }
+    if (
+      this.frontier ===
+      "0000000000000000000000000000000000000000000000000000000000000000"
+    ) {
+      this.sendToView("errorMessage", "No open blocks yet")
+      return
+    }
+
     this.isChangingRep = true
     try {
       const work = (await this.getWork(this.frontier, true, true)) || false
@@ -603,12 +690,12 @@ export class Wallet {
         return
       }
 
-      let block = this.newChangeBlock(new_rep, work[0])
-      this.pushBlock(block)
+      let block = this.newChangeBlock(newRep, work[0])
+      this.processBlock(block)
         .then(response => {
           if (response.hash) {
             this.frontier = response.hash
-            this.sendToView("changedRep", new_rep)
+            this.sendToView("changedRep", newRep)
             this.getNewWorkPool()
 
             setTimeout(() => {
@@ -636,45 +723,31 @@ export class Wallet {
   }
 
   newChangeBlock(newRep, hasWork) {
-    console.log('NOT CHANGE IMPLEMENTED');
-    //let newBalancePadded = this.getPaddedBalance(this.balance)
-    //let link =
-    //  "0000000000000000000000000000000000000000000000000000000000000000";
-    //let signature = util.signChangeBlock(
-    //  this.account.address,
-    //  this.frontier,
-    //  newRep,
-    //  newBalancePadded,
-    //  link,
-    //  this.account.privateKey
-    //);
-
-    //let changeBlock = {
-    //  type: "state",
-    //  account: this.account.address,
-    //  previous: this.frontier, //hex format
-    //  representative: newRep,
-    //  destination: false,
-    //  balance: this.balance.toString(10),
-    //  work: hasWork,
-    //  signature: signature,
-    //  linkHEX: link,
-    //  link: link
-    //};
-
-    //return changeBlock
-  }
-
-  newOpenBlock(blockinfo, hasWork) {
-    console.log('NOT OPEN IMPLEMENTED');
     const data = {
-      // Your current balance in RAW
+      // Your current balance in raw nano.
       walletBalanceRaw: this.balance,
       // Your address
       toAddress: this.account.address,
-      // Representative from wallet info
+      // The new representative
+      representativeAddress: newRep,
+      // Frontier from account info
+      frontier: this.frontier,
+      // Generate the work server-side or with a DPOW service
+      work: hasWork,
+    }
+    const signedBlock = block.representative(data, this.account.privateKey);
+    return signedBlock;
+  }
+
+  newReceiveBlock(blockinfo, hasWork) {
+    const data = {
+      // Your current balance in raw nano.
+      walletBalanceRaw: this.balance,
+      // Your address
+      toAddress: this.account.address,
+      // Representative from account info
       representativeAddress: this.representative,
-      // Frontier from wallet info
+      // Frontier from account info
       frontier: this.frontier,
       // From the pending transaction
       transactionHash: blockinfo.hash,
@@ -683,75 +756,33 @@ export class Wallet {
       // Generate the work server-side or with a DPOW service
       work: hasWork,
     }
-
     const signedBlock = block.receive(data, this.account.privateKey);
-    console.log('signedBlock', signedBlock);
     return signedBlock;
   }
 
   newSendBlock(blockinfo, hasWork) {
-    console.log('NOT IMPLEMENTED');
-    //let amount = util.mnanoToRaw(new BigNumber(blockinfo.data.amount))
-    //let to = blockinfo.data.to
-    //let newBalance = new BigNumber(this.balance).minus(new BigNumber(amount))
-    //let newBalancePadded = this.getPaddedBalance(newBalance)
-    //let signature = util.signSendBlock(
-    //  this.account.address,
-    //  this.frontier,
-    //  this.representative,
-    //  newBalancePadded,
-    //  to,
-    //  this.account.privateKey
-    //)
-
-    //return {
-    //  type: "state",
-    //  account: this.account.address,
-    //  previous: this.frontier, //hex format
-    //  representative: this.representative,
-    //  destination: to,
-    //  balance: newBalance.toString(),
-    //  work: hasWork,
-    //  signature: signature,
-    //  linkHEX: util.getAccountPublicKey(to),
-    //  link: to
-    //}
+    const data = {
+      // Your current balance in raw nano.
+      walletBalanceRaw: this.balance,
+      // Your address
+      fromAddress: this.account.address,
+      // The address to send to
+      toAddress: blockinfo.to,
+      // Representative from account info
+      representativeAddress: this.representative,
+      // Frontier from account info
+      frontier: this.frontier,
+      // From the pending transaction in RAW
+      amountRaw: new BigNumber(util.mnanoToRaw(blockinfo.amount)),
+      // Generate the work server-side or with a DPOW service
+      work: hasWork,
+    }
+    const signedBlock = block.send(data, this.account.privateKey);
+    return signedBlock;
   }
 
-  checkChangeRep(data) {
-    let newRep = data.trim()
-    if (this.isChangingRep) {
-      this.sendToView("errorMessage", "Changing too often, wait a few seconds")
-      return
-    }
-    if (newRep === "") {
-      this.sendToView("errorMessage", "Empty address-field")
-      return
-    }
-    if (this.isProcessing || this.isSending) {
-      this.sendToView("errorMessage", "Currently processing pending..")
-      return
-    }
-    if (newRep === this.representative) {
-      this.sendToView("errorMessage", "Already voting for this reprentative")
-      return
-    }
-    if (!util.checksumAccount(newRep)) {
-      this.sendToView("errorMessage", "Not a valid address")
-      return
-    }
-    if (
-      this.frontier ===
-      "0000000000000000000000000000000000000000000000000000000000000000"
-    ) {
-      this.sendToView("errorMessage", "No open blocks yet")
-      return
-    }
-
-    this.changeRepresentative(data)
-  }
-  // TODO: CHANGE BLOCK
-  //
+  // Signing
+  // ==================================================================
 
   signMessage(message) {
     console.log("signing " + message);
@@ -777,7 +808,7 @@ export class Wallet {
         const data = popupMsg.data
 
         if (action === "toPage") this.toPage(data)
-        if (action === "import") this.checkImport(data)
+        if (action === "import") this.import(data)
         if (action === "unlock") this.unlock(data)
         if (action === "lock") this.lock()
         if (action === "update") this.updateView()
@@ -788,7 +819,7 @@ export class Wallet {
         if (action === "confirmSend") this.send(data)
         if (action === "resetConfirm") this.resetConfirm(data)
         if (action === "sign") this.sign(data)
-        if (action === "changeRepresentative") this.checkChangeRep(data)
+        if (action === "changeRepresentative") this.changeRepresentative(data)
         if (action === "removeWallet") this.removeWallet()
       }
     } catch (e) {
@@ -853,13 +884,10 @@ export class Wallet {
   }
 
   async unlock(pw) {
-    console.log("ZZZ unlock")
     let encryptedSeed = (await util.getLocalStorageItem("encryptedSeed")) || false
     if (!encryptedSeed) return this.toPage("welcome")
     try {
       let seed = util.decryptString(encryptedSeed, pw)
-      console.log("ZZZ unencrypted seed " + seed)
-
       if (!/[0-9A-Fa-f]{128}/g.test(seed) || pw.length < 2) {
         return this.sendToView("errorMessage", true)
       }
@@ -881,11 +909,11 @@ export class Wallet {
     this.isViewProcessing = false
     this.isSending = false
     this.isChangingRep = false
-    this.successfullBlocks = []
+    this.successfulBlocks = []
     this.sendHash = ""
     this.confirmSend = false
     this.keepAliveSet = false
-    this.successfullBlocks = []
+    this.successfulBlocks = []
     this.pendingBlocks = []
     this.history = []
     this.workPool = {}
@@ -914,7 +942,7 @@ export class Wallet {
     )
   }
 
-  async checkImport(data) {
+  async import(data) {
     let seed = data.seed
     let pw = data.pw
     let re_pw = data.re_pw
@@ -930,49 +958,9 @@ export class Wallet {
     }
 
     await util.setLocalStorageItem("encryptedSeed", util.encryptString(seed, pw));
-
     this.setupWallet(seed)
   }
 
-  checkSend(data) {
-    let amount = new BigNumber(util.mnanoToRaw(data.amount));
-    console.log("amount", amount);
-    let to = data.to
-    let errorMessage = false
-    if (amount.e < 0) errorMessage = "Your nano-unit is too small to send"
-    if (amount.isNaN()) errorMessage = "Amount is not a valid number"
-    if (amount.isLessThanOrEqualTo(0))
-      errorMessage = "You can't send zero or negative NANO"
-    if (/^\d+\.\d+$/.test(amount.toString()))
-      errorMessage = "Cannot send smaller than raw"
-    if (amount.isGreaterThan(this.balance))
-      errorMessage = "Not enough Mnano in this wallet"
-    if (!util.checksumAccount(to)) errorMessage = "Invalid address"
-    if (to === this.account.address) errorMessage = "Can't send to yourself"
-    if (this.isViewProcessing)
-      errorMessage = "Still processing pendingblocks..."
-    if (
-      this.frontier ===
-      "0000000000000000000000000000000000000000000000000000000000000000"
-    ) {
-      errorMessage = "This account has nothing received yet"
-    }
-    if (
-      this.isSending ||
-      this.isChangingRep ||
-      this.isGenerating
-    ) {
-      errorMessage = "Cooling down... try again in a few seconds"
-    }
-    if (errorMessage) {
-      this.sendToView("errorMessage", errorMessage)
-      return false
-    }
-
-    this.confirmSend = true
-    this.updateView()
-    return true
-  }
 
   updateView() {
     let result = []
@@ -1053,7 +1041,7 @@ export class Wallet {
   sendAPIRequest(data) {
     return fetch(API_URL, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(data)})
     .then(response => response.json())
-    .then(response => ({ok: true, response}))
+    .then(response => ({ok: response.error ? false : true, response}))
     .catch(error => Promise.resolve({ok: false, error}));
   }
 
@@ -1144,17 +1132,12 @@ export class Wallet {
     }
   }
 
-  pushBlock(block) {
-    return new Promise((resolved, rejected) => {
-      this.sendAPIRequest({action: "process", 'json_block': true, block:block})
-        .then(response => {
-          console.log("ReERROR", response)
-          resolved(response.data.result)
-        })
-        .catch(err => {
-          console.log("Receive ERROR", err)
-          rejected()
-        })
+  processBlock(block) {
+    return this.sendAPIRequest({
+      action: "process",
+      'json_block': true,
+      'watch_work': false,
+      block:block
     })
   }
 

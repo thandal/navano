@@ -23,7 +23,7 @@
 
     <div class="pwArea">
       <input
-        autofocus
+        id="password_input"
         type="password"
         class="pw"
         v-model="pw_unlock"
@@ -31,6 +31,7 @@
         placeholder="Enter password"
         v-on:keyup.enter="unlockSeed"
         autocomplete="off"
+        autofocus
       >
       <button class="no-hl" @click="unlockSeed">Unlock wallet</button>
     </div>
