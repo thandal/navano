@@ -129,8 +129,6 @@ export class Wallet {
       return
     }
 
-    console.log('########### ', request.response);
-
     const data = request.response;
     this.balance = new BigNumber(data.balance)
     this.frontier = data.frontier
@@ -395,7 +393,6 @@ export class Wallet {
     if (hash === "0000000000000000000000000000000000000000000000000000000000000000") {
       hashWork = this.account.publicKey;
     }
-    console.log("<<<<  A", hashWork);
 
     if (checkPool) {
       // Check for local cached work
@@ -410,12 +407,10 @@ export class Wallet {
     }
 
     if (useServer) {
-      console.log("<<<<  B");
       let gotWorkResponse = await this.sendAPIRequest({
         action: "work_generate",
         hash: hashWork
       });
-      console.log("<<<<  C", gotWorkResponse);
       if (gotWorkResponse.ok) {
         this.isGenerating = false
         this.updateView()
@@ -518,12 +513,12 @@ export class Wallet {
     if (!this.checkSend(data)) return
 
     this.isSending = true
-    this.isGenerating = true
+    this.isGenerating = true  // remove?
     this.updateView()
 
     const work = (await this.getWork(this.frontier, true, true)) || false
     if (!work) {
-      console.log("1/ Error generating PoW")
+      console.log("Error generating PoW")
       this.resetConfirm()
       this.toPage("failed")
       return
@@ -565,9 +560,8 @@ export class Wallet {
     }
 
     const work = (await this.getWork(this.frontier, true, true)) || false
-
     if (!work) {
-      console.log("1/ Error generating PoW")
+      console.log("Error generating PoW")
       this.isViewProcessing = false
       this.isProcessing = false
       this.updateView()
@@ -640,9 +634,9 @@ export class Wallet {
     this.isChangingRep = true
     const work = (await this.getWork(this.frontier, true, true)) || false
     if (!work) {
+      console.log("Error generating PoW")
       this.isChangingRep = false
       this.sendToView("errorMessage", "Something went wrong, try again")
-      this.updateView()
       return
     }
 
@@ -727,9 +721,7 @@ export class Wallet {
   // ==================================================================
 
   signMessage(message) {
-    console.log("signing " + message);
     let signature = this.locked ? "locked" : tools.signMessage(this.account.privateKey, message);
-    console.log("signature " + signature);
     return signature;
   }
   
