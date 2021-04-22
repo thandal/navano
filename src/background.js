@@ -16,12 +16,13 @@ function startExtension() {
     }
   });
 
+  // TODO: find a more general replacement for messageExternal, because of the
+  // manifest restriction.
   chrome.runtime.onMessageExternal.addListener(
     function(request, sender, sendResponse) {
       //if (sender.url == blocklistedWebsite)
       //  return;  // don't allow this web page access
       console.log('onMessageExternal', request);
-      console.dir(request);
       if (request.action === 'signMessage') {
         if (wallet.locked) {
           window.alert("Please unlock (or create) your Navano wallet")
@@ -40,6 +41,7 @@ function startExtension() {
           window.alert("Please unlock (or create) your Navano wallet")
           sendResponse({error : "locked"});
         } else {
+          console.log("TRYING TO SEND RESPONSE!", wallet.account.address);
           sendResponse({"address" : wallet.account.address});
         }
       }

@@ -14,7 +14,7 @@
 		"scripts": ["background.js"]
 	},
 	"externally_connectable": {
-		"matches": ["*://total.professional.com/*"]
-
+		"matches": ["*://total.professional.com/*",
+		            "*://host.dais.one/*"]
 	}
 }
