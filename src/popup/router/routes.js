@@ -14,7 +14,8 @@ import Sign from "./pages/Sign"
 import Locked from "./pages/locked"
 import Delete from "./pages/DeleteWallet"
 import Backup from "./pages/Backup"
-import ChangePassword from "./pages/PasswordChange"
+import ChangePassword from "./pages/ChangePassword"
+import Connection from "./pages/Connection"
 
 export default [
 	// Setup pages
@@ -97,5 +98,10 @@ export default [
 		name: "changepassword",
 		path: "/changepassword",
 		component: ChangePassword
+	},
+	{
+		name: "connection",
+		path: "/connection",
+		component: Connection
 	}
 ]

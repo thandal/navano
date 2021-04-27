@@ -6,23 +6,26 @@ import * as startThreads from "./pow/startThreads.js"
 import * as DOMPurify from "dompurify"
 import { block, wallet, tools } from "nanocurrency-web"
 
-//const WS_URL = "wss://socket.nanos.cc"
-//const WS_URL = "wss://ws.mynano.ninja"
-const WS_URL = "ws://localhost:17078"
+//const DEFAULT_WS_URL = "wss://socket.nanos.cc"
+//const DEFAULT_WS_URL = "wss://ws.mynano.ninja"
+//const DEFAULT_WS_URL = "ws://localhost:17078"
+const DEFAULT_WS_URL = "ws://nano.dais.one:17078"
 
-//const API_URL = "https://proxy.nanos.cc/proxy"
-//const API_URL = "https://vox.nanos.cc/api"
-//const API_URL = "https://mynano.ninja/api/node"
-const API_URL = "http://localhost:17076"
+//const DEFAULT_API_URL = "https://proxy.nanos.cc/proxy"
+//const DEFAULT_API_URL = "https://vox.nanos.cc/api"
+//const DEFAULT_API_URL = "https://mynano.ninja/api/node"
+//const DEFAULT_API_URL = "http://localhost:17076"
+const DEFAULT_RPC_URL = "http://nano.dais.one:17076"
 
 export class Wallet {
   constructor() {
     this.port = false
     this.locked = true
-    this.openWalletView = false
     this.isViewProcessing = false
     this.balance = new BigNumber(0)
 
+    this.rpcURL = ""
+    this.wsURL = ""
     this.socket = { ws: null, connected: false }
     this.newTransactions$ = new BehaviorSubject(null)
     this.isSending = false
@@ -49,6 +52,9 @@ export class Wallet {
       chrome.browserAction.setIcon({ path: "/icons/icon_128_locked.png" })
     }
 
+    this.rpcURL = (await util.getLocalStorageItem("rpcURL")) || DEFAULT_RPC_URL
+    this.wsURL = (await util.getLocalStorageItem("wsURL")) || DEFAULT_WS_URL
+
     // Remove temporary LocalStorage-items if extension crashed/was offline for a long time
     util.clearLocalStorage([
       "generatedSeed",
@@ -61,7 +67,6 @@ export class Wallet {
   async openPopup(port) {
     this.port = port
     this.port.onMessage.addListener(this.actionFromWalletView.bind(this))
-    this.openWalletView = true
     this.toPage(this.page)
   }
 
@@ -81,32 +86,8 @@ export class Wallet {
     this.connect()
   }
 
-  forceDisconnect() {
-    this.forcedLock = true
-    this.updateView()
-    if (this.socket.connected && this.socket.ws) {
-      this.socket.ws.onclose = msg => {}
-      this.socket.ws.onerror = msg => {}
-      this.socket.ws.close()
-      delete this.socket.ws
-      this.socket.connected = false
-    } else {
-      delete this.socket.ws
-      this.socket = { ws: null, connected: false }
-    }
-  }
-
-  connectionProblem() {
-    this.offline = true
-    this.checkOffline()
-    this.socket.ws.onclose = msg => {}
-    this.socket.ws.onerror = msg => {}
-    this.socket.ws.close()
-    delete this.socket.ws
-    this.socket.connected = false
-    setTimeout(() => this.attemptReconnect(), this.reconnectTimeout)
-  }
-
+  // RPC CALLS
+  // ==================================================================
   async getAccountInfo() {
     let request = await this.sendAPIRequest({
         action: "account_info",
@@ -221,12 +202,46 @@ export class Wallet {
     this.reconnectTimeout = 5 * 1000
   }
 
+  // WEBSOCK STUFF
+  // ==================================================================
+  forceDisconnect() {
+    this.forcedLock = true
+    this.updateView()
+    if (this.socket.connected && this.socket.ws) {
+      this.socket.ws.onclose = msg => {}
+      this.socket.ws.onerror = msg => {}
+      this.socket.ws.close()
+      delete this.socket.ws
+      this.socket.connected = false
+    } else {
+      delete this.socket.ws
+      this.socket = { ws: null, connected: false }
+    }
+  }
+
+  connectionProblem() {
+    this.offline = true
+    this.checkOffline()
+    this.socket.ws.onclose = msg => {}
+    this.socket.ws.onerror = msg => {}
+    this.socket.ws.close()
+    delete this.socket.ws
+    this.socket.connected = false
+    setTimeout(() => this.attemptReconnect(), this.reconnectTimeout)
+  }
+
+  setConnection(data) {
+    this.rpcURL = data.rpcURL;
+    this.wsURL = data.wsURL;
+    this.connect();
+  }
+
   connect() {
-    if ((this.socket.connected && this.socket.ws) || this.forcedLock) {
+    if (this.forcedLock) {
       return
     }
     delete this.socket.ws
-    const ws = new WebSocket(WS_URL)
+    const ws = new WebSocket(this.wsURL)
     this.socket.ws = ws
     ws.onopen = msg => {
       this.socket.connected = true
@@ -754,6 +769,7 @@ export class Wallet {
         if (action === "sign") this.sign(data)
         if (action === "changeRepresentative") this.changeRepresentative(data)
         if (action === "removeWallet") this.removeWallet()
+        if (action === "setConnection") this.setConnection(data)
       }
     } catch (e) {
       return console.log("Error actionFromWalletView", e)
@@ -795,20 +811,21 @@ export class Wallet {
 
   toPage(to) {
     const allowed = [
-      "create",
-      "import",
-      "dashboard",
-      "send",
-      "receive",
-      "success",
-      "locked",
-      "transactions",
-      "failed",
-      "delete",
-      "representative",
       "backup",
       "changepassword",
-      "sign"
+      "connection",
+      "create",
+      "dashboard",
+      "delete",
+      "failed",
+      "import",
+      "locked",
+      "receive",
+      "representative",
+      "send",
+      "sign",
+      "success",
+      "transactions",
     ]
 
     let validPage = allowed.includes(to) ? to : "welcome"
@@ -894,83 +911,70 @@ export class Wallet {
   }
 
   updateView() {
-    let result = []
+    // Assemble history and pending blocks.
+    let transactions = []
+    if (this.pendingBlocks) {
+      this.pendingBlocks.forEach(element => {
+        let block = {
+          type: "pending",
+          amount: util.rawToMnano(element.amount).toString(),
+          account: element.account,
+          hash: element.hash
+        }
+        transactions.push(block)
+      })
+    }
+    if (this.history) {
+      this.history.forEach(element => {
+        let block = {
+          type: element.type,
+          amount: util.rawToMnano(element.amount).toString(),
+          account: element.account,
+          hash: element.hash
+        }
+        transactions.push(block)
+      })
+    }
+
+    let prep_balance = '--';
+    let full_balance = '--';
     if (!this.offline) {
-      if (this.pendingBlocks) {
-        this.pendingBlocks.forEach(element => {
-          let block = {
-            type: "pending",
-            amount: util.rawToMnano(element.amount).toString(),
-            account: element.account,
-            hash: element.hash
-          }
-          result.push(block)
-        })
-      }
-
-      if (this.history) {
-        this.history.forEach(element => {
-          let block = {
-            type: element.type,
-            amount: util.rawToMnano(element.amount).toString(),
-            account: element.account,
-            hash: element.hash
-          }
-          result.push(block)
-        })
-      }
-
-      let full_balance = util.rawToMnano(this.balance).toString();
-      let prep_balance = full_balance.toString().slice(0, 8)
+      full_balance = util.rawToMnano(this.balance).toString();
+      prep_balance = full_balance.toString().slice(0, 8)
       if (prep_balance === "0") {
         prep_balance = "0.00"
       }
-      let info = {
-        balance: prep_balance,
-        total_pending: this.pendingBlocks ? this.pendingBlocks.length : 0,
-        transactions: result,
-        full_balance,
-        frontier: this.frontier,
-        publicAccount: this.account.address,
-        isProcessing: this.isViewProcessing,
-        representative: this.representative,
-        sendHash: this.sendHash,
-        isGenerating: this.isGenerating,
-        isSending: this.isSending,
-        isConfirm: this.confirmSend,
-        signature: this.signature,
-        offline: this.offline
-      }
-      this.sendToView("update", info)
-    } else {
-      this.sendToView("update", {
-        balance: "--",
-        total_pending: 0,
-        transactions: [],
-        full_balance: "--",
-        frontier: "",
-        publicAccount: "--",
-        isProcessing: this.isViewProcessing,
-        representative: "--",
-        sendHash: "",
-        isGenerating: this.isGenerating,
-        isSending: this.isSending,
-        isConfirm: this.confirmSend,
-        signature: this.signature,
-        offline: true
-      })
     }
+
+    let info = {
+      balance: prep_balance,
+      total_pending: this.pendingBlocks ? this.pendingBlocks.length : 0,
+      transactions,
+      full_balance,
+      frontier: this.frontier,
+      publicAccount: this.account.address,
+      isProcessing: this.isViewProcessing,
+      representative: this.representative,
+      sendHash: this.sendHash,
+      isGenerating: this.isGenerating,
+      isSending: this.isSending,
+      isConfirm: this.confirmSend,
+      signature: this.signature,
+      offline: this.offline,
+      rpcURL: this.rpcURL,
+      wsURL: this.wsURL
+    }
+    this.sendToView("update", info)
   }
 
   // BASIC UTILITY FUNCTIONS
   // ==================================================================
   sendToView(action, data) {
-    if (this.openWalletView)
-      this.port.postMessage({ action, data })
+    this.port.postMessage({ action, data })
   }
 
   sendAPIRequest(data) {
-    return fetch(API_URL, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(data)})
+    return fetch(this.rpcURL, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(data)})
     .then(response => response.json())
     .then(response => ({ok: response.error ? false : true, response}))
     .catch(error => Promise.resolve({ok: false, error}));
@@ -992,6 +996,10 @@ export class Wallet {
     }
     if (this.pendingBlocks && this.pendingBlocks.length > 0) {
       chrome.browserAction.setIcon({ path: "/icons/icon_128_pending.png" })
+      return
+    }
+    if (this.offline) {
+      chrome.browserAction.setIcon({ path: "/icons/icon_128_offline.png" })
       return
     }
 

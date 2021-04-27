@@ -75,6 +75,7 @@
         <a @click="toPage('changepassword')">Change password</a>
         <a @click="toPage('backup')">Backup wallet</a>
         <a @click="toPage('delete')">Delete wallet</a>
+        <a @click="toPage('connection')">Set connection</a>
       </div>
     </div>
   </div>
@@ -179,6 +180,7 @@ export default {
         "backup",
         "changepassword",
         "representative",
+        "connection",
         "sign"
       ].includes(to.name);
 
@@ -192,6 +194,7 @@ export default {
         "changepassword",
         "backup",
         "representative",
+        "connection",
         "sign"
       ].includes(to.name);
     }
