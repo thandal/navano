@@ -14,6 +14,7 @@ Navano resuscitates basic capabilities of sending and receiving nano, as well th
 3. Run:
 ```bash
 $ npm install
+$ (optional) npm audit fix 
 $ npm run build
 ```
 
