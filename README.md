@@ -1,7 +1,9 @@
 # NAVANO
 Navano is a Nano featherweight-wallet browser extension, derived from [VANO](https://github.com/marekhoeven/VANO). Nano is a fast & fee-less currency secured by a decentralised network. The Navano wallet stores all sensitive data locally (encrypted) and never communicates it to a server. 
 
-**NAVANO is still in beta, *do not* store large amounts of NANO on this wallet!**
+Navano resuscitates basic capabilities of sending and receiving nano, as well the new ability to sign messages.
+
+**Navano is still in beta, *do not* store large amounts of nano on this wallet!**
 
 ![Dashboard](https://github.com/thandal/navano/blob/master/dashboard.png)
 
@@ -50,32 +52,7 @@ Keep in mind that HMR only works for your **background** entry.
 Build a zip file following this format `<name>-v<version>.zip`, by reading `name` and `version` from `manifest.json` file.
 Zip file is located in `dist-zip` folder.
 
-## Todo
-
-From VANO:
-- Tests
-- Add addressbook (alias system?)
-- Optimalisation of JS functions
-- Improve some shitty CSS (on components and globally)
-- Documentation + better structure for teamwork 
-- Set more user-option like a minimum receive amount
-- Perhaps select what specific individual pendings to accept?
-
 ## Acknowledgements
 
-First, thanks to marekhoeven and the VANO repo!
-
-### From VANO:
-Special thanks to the following repo's. You made the creation of this extension a lot easier. Thank you!
-
-- [Kocal/vue-web-extension](https://github.com/Kocal/vue-web-extension) - Vue-web-extension template
-- [cronoh/nanovault](https://github.com/cronoh/nanovault) - Nanovault wallet
-- [numtel/nano-webgl-pow](https://github.com/numtel/nano-webgl-pow) - WebGL PoW Implementation
-- [jaimehgb/RaiBlocksWebAssemblyPoW](https://github.com/jaimehgb/RaiBlocksWebAssemblyPoW) - CPU PoW Implementation
-- [dcposch/blakejs](https://github.com/dcposch/blakejs) - Blake2b Implementation
-- [dchest/tweetnacl-js](https://github.com/dchest/tweetnacl-js) - Cryptography Implementation
-
-## Donate
-
-If you like what I've made and/or are feeling generous, you can donate to the creator of VANO at
+First, thanks to marekhoeven and the VANO repo!  If you like what they've made and/or are feeling generous, you can donate to the creator of VANO at:
 `xrb_1xrhezmywgmq3n13d5rdnntubdkafi8qnxjcmwj6wqhwis8go84m18639tue`
