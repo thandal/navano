@@ -20,7 +20,7 @@
       ></input>
     </div>
 
-    <button class="send no-hl" @click="setConnection()"> Set </button>
+    <button class="set" :class="{'green': clicked}" @click="setConnection()"> {{setText}} </button>
   </div>
 </template>
 
@@ -32,6 +32,8 @@ export default {
     return {
       rpcURL: "",
       wsURL: "",
+      setText: "Set",
+      clicked: false
     };
   },
 
@@ -51,6 +53,12 @@ export default {
           action: "setConnection",
           data: { rpcURL: this.rpcURL, wsURL: this.wsURL }
         });
+      this.setText = "Connection Set!";
+      this.clicked = true;
+      setTimeout(() => {
+        this.setText = "Set";
+        this.clicked = false;
+      }, 800);
     }
   },
   beforeMount() {
@@ -155,6 +163,11 @@ textarea:focus::-webkit-input-placeholder {
 h1 {
   padding-bottom: 20px;
   font-size: 17px;
+}
+
+.green {
+  background-color: #4bb993 !important;
+  transition: background-color 0.01 ease;
 }
 
 .header h1.removePad {

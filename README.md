@@ -1,7 +1,7 @@
 # NAVANO
 Navano is a Nano featherweight-wallet browser extension, derived from [VANO](https://github.com/marekhoeven/VANO). Nano is a fast & fee-less currency secured by a decentralised network. The Navano wallet stores all sensitive data locally (encrypted) and never communicates it to a server. 
 
-Navano resuscitates basic capabilities of sending and receiving nano, as well the new ability to sign messages.
+Navano resuscitates basic capabilities of sending and receiving nano, as well the new ability to sign messages and to set the RPC and websocket urls.
 
 **Navano is still in beta, *do not* store large amounts of nano on this wallet!**
 

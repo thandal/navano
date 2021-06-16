@@ -6,16 +6,13 @@ import * as startThreads from "./pow/startThreads.js"
 import * as DOMPurify from "dompurify"
 import { block, wallet, tools } from "nanocurrency-web"
 
-//const DEFAULT_WS_URL = "wss://socket.nanos.cc"
-//const DEFAULT_WS_URL = "wss://ws.mynano.ninja"
-//const DEFAULT_WS_URL = "ws://localhost:17078"
-const DEFAULT_WS_URL = "ws://nano.dais.one:17078"
-
-//const DEFAULT_API_URL = "https://proxy.nanos.cc/proxy"
-//const DEFAULT_API_URL = "https://vox.nanos.cc/api"
 //const DEFAULT_API_URL = "https://mynano.ninja/api/node"
-//const DEFAULT_API_URL = "http://localhost:17076"
-const DEFAULT_RPC_URL = "http://nano.dais.one:17076"
+//const DEFAULT_RPC_URL = "http://nano.dais.one:17076"
+const DEFAULT_RPC_URL = "http://localhost:17076"
+
+//const DEFAULT_WS_URL = "wss://ws.mynano.ninja"
+//const DEFAULT_WS_URL = "ws://nano.dais.one:17078"
+const DEFAULT_WS_URL = "ws://localhost:17078"
 
 export class Wallet {
   constructor() {
