@@ -14,7 +14,7 @@ Similar to MetaMask, Navano uses injection to provide access to "window.nano" in
 window.nano.getAddress()
 window.nano.signMessage("some message")
 ```
-
+See www/index.html for an example.
 
 ## How to run the extension locally
 
