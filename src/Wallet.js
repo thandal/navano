@@ -242,17 +242,16 @@ export class Wallet {
     this.socket.ws = ws
     ws.onopen = msg => {
       this.socket.connected = true
-      const start_event = JSON.stringify({
-        event: "subscribe",
-        data: this.account.address
+      const confirmation_subscription = JSON.stringify({
+        action: 'subscribe',
+        topic: "confirmation"
       })
-
-      ws.send(start_event)
+      ws.send(confirmation_subscription)
 
       if (!this.keepaliveSet) {
         this.keepAlive()
       }
-
+      // Get the current state from the RPC *after* the websocket is set up.
       this.getAccountInfo()
       this.getAccountHistory()
       this.getAccountPending()
@@ -275,12 +274,10 @@ export class Wallet {
 
     ws.onmessage = msg => {
       try {
-        let event = JSON.parse(msg.data)
-        let type = event.event
-        let data = event.data
-
-        if (type === "newTransaction") {
-          this.newTransactions$.next(data)
+        let data = JSON.parse(msg.data)
+        console.log('socket onmessage:', data);
+        if (data.topic === 'confirmation') {
+          this.newTransactions$.next(data.message);
         }
       } catch (err) {
         return false
@@ -298,26 +295,22 @@ export class Wallet {
   keepAlive() {
     this.keepAliveSet = true
     if (this.socket.connected) {
-      this.socket.ws.send(JSON.stringify({ alive: "keepAlive" }))
+      this.socket.ws.send(JSON.stringify({ alive: 'ping' }));
     }
-
-    setTimeout(() => {
-      this.keepAlive()
-    }, this.keepaliveTimeout)
+    setTimeout(() => { this.keepAlive() }, this.keepaliveTimeout)
   }
 
   subscribeTransactions() {
     this.newTransactions$.subscribe(async data => {
       if (!data) return
-      let isSend = data.is_send
-      let account = data.account
-      let link = data.block.link_as_account
-      if (
-        isSend &&
-        account !== this.account.address &&
-        link === this.account.address
-      ) {
-        // SEND SOMETHING TO ME
+      if (!data.block) return
+      let account = data.account;
+      let subtype = data.block.subtype;
+      let link = data.block.link_as_account;
+      if (subtype === 'send' &&
+          account !== this.account.address &&
+          link === this.account.address) {
+        // This is a pending transfer TO this account.
         this.pendingBlocks.unshift({
           amount: data.amount,
           account: account,
@@ -332,9 +325,7 @@ export class Wallet {
           iconUrl: "./icons/icon_128.png",
           title: "Received nano!",
           message:
-            "New pending deposit of " +
-            data.amount +
-            " raw",
+            "New pending deposit of " + data.amount + " raw",
           priority: 2,
           silent: false
         }
@@ -344,15 +335,12 @@ export class Wallet {
         chrome.notifications.create(id, notification_options, function(id) {})
       }
 
-      if (
-        isSend &&
-        account === this.account.address &&
-        link !== this.account.address 
-      ) {
-        // I SEND SOMETHING
-        this.frontier = data.hash
-        this.balance = new BigNumber(data.block.balance)
-
+      if (subtype === 'send' &&
+          account === this.account.address &&
+          link !== this.account.address) {
+        // This is a transfer FROM this account.
+        this.frontier = data.hash;
+        this.balance = new BigNumber(data.block.balance);
         this.history.unshift({
           amount: data.amount,
           account: data.block.link_as_account,
@@ -362,8 +350,8 @@ export class Wallet {
         this.updateView()
       }
 
-      if (!isSend && account === this.account.address) {
-        // RECEIVED TO ME!
+      if (subtype === 'receive' && account === this.account.address) {
+        // This is a confirmed transfer TO this account (receive).
         this.frontier = data.hash
         this.representative = data.block.representative
         if (
@@ -567,6 +555,7 @@ export class Wallet {
     this.isProcessing = true
     const nextBlock = this.pendingBlocks[0]
     if (this.successfulBlocks.find(b => b.hash == nextBlock.hash)) {
+      console.log('processPending trying again....');
       return setTimeout(() => this.processPending(), 1500)
     }
 
@@ -581,14 +570,16 @@ export class Wallet {
 
     let block = this.newReceiveBlock(nextBlock, work[0])
     let request = await this.processBlock(block);
+    console.log('processPending.request', request);
     if (!request.ok) {
       console.log("Receive error", request)
       this.isProcessing = false
       this.isViewProcessing = false
       this.updateView()
     } else if (request.response.hash) {
-      if (this.successfulBlocks.length >= 15)
+      if (this.successfulBlocks.length >= 15) {
         this.successfulBlocks.shift()
+      }
       this.successfulBlocks.push(nextBlock.hash)
 
       let to_history = this.pendingBlocks.shift()
@@ -603,7 +594,7 @@ export class Wallet {
       if (!this.pendingBlocks.length) {
         this.isViewProcessing = false
         this.updateView()
-        this.frontier = response.hash
+        this.frontier = request.response.hash
         this.getNewWorkPool()
       } else {
         // [Auto-process the next one... maybe should be a user choice?]
