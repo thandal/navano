@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html>
+<body>
+
+[To host this page with a simple python webserver, 'cd www', 'python3 -m http.server', then open <a href=http://localhost:8000>http://localhost:8000</a>.]
+
+<h1>Navano javascript test/examples</h1>
+
+<h2>getAddress</h2>
+<button type="button"
+	onclick="window.nano.getAddress();">
+        getAddress	
+</button>
+<p id=address></p>
+
+<h2>signMessage</h2>
+<form id=signMessageForm>
+  <p>
+    Message to sign: <input type=text id=message name=message value='Some message...'>
+    <input type=button onclick="document.getElementById('signature').innerHTML = 'Signing message \'' + message.value + '\''; window.nano.signMessage(message.value).then(response => document.getElementById('signature').innerHTML = 'Signature: ' + response);" value="Sign Message">
+  </p>
+  <p id=signature></p>
+</form>
+
+
+</body>
+</html>
