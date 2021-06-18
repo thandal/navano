@@ -7,6 +7,15 @@ Navano resuscitates basic capabilities of sending and receiving nano, as well th
 
 ![Dashboard](https://github.com/thandal/navano/blob/master/dashboard.png)
 
+## How to use the javascript API
+
+Similar to MetaMask, Navano uses injection to provide access to "window.nano" in all web pages. The API currently only supports two calls:
+```
+window.nano.getAddress()
+window.nano.signMessage("some message")
+```
+
+
 ## How to run the extension locally
 
 1. Download as ZIP and UNZIP into a folder
