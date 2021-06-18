@@ -13,6 +13,8 @@ const config = {
 	context: __dirname + "/src",
 	entry: {
 		background: "./background.js",
+		content_script: "./content_script.js",
+		inject_script: "./inject_script.js",
 		"popup/popup": "./popup/popup.js",
 	},
 	output: {

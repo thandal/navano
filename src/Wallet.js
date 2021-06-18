@@ -732,7 +732,7 @@ export class Wallet {
   // ==================================================================
 
   signMessage(message) {
-    let signature = this.locked ? "locked" : tools.signMessage(this.account.privateKey, message);
+    let signature = this.locked ? "locked" : tools.sign(this.account.privateKey, message);
     return signature;
   }
   
