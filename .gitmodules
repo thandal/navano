@@ -1,0 +1,3 @@
+[submodule "nano_node_standalone"]
+	path = nano_node_standalone
+	url = https://github.com/thandal/nano_node_standalone
