@@ -86,6 +86,7 @@ export class Wallet {
   // RPC CALLS
   // ==================================================================
   async getAccountInfo() {
+    console.log('getAccountInfo ...');
     let request = await this.sendAPIRequest({
         action: "account_info",
         account: this.account.address,
@@ -94,6 +95,8 @@ export class Wallet {
       });
 
     if (!request.ok) {
+      console.log('request not ok')
+      console.dir(request);
       connectionProblem();
       return
     }
@@ -102,6 +105,7 @@ export class Wallet {
       console.log("getAccountInfo error", request.response.error);
 
     if (request.response.error == "Account not found") {
+      console.log(request.response.error);
       this.offline = false
       this.checkOffline()
       return
@@ -111,6 +115,7 @@ export class Wallet {
     this.balance = new BigNumber(data.balance)
     this.frontier = data.frontier
     this.representative = data.representative
+    console.dir('getAccountInfo data', data);
 
     this.checkIcon()
     if (["import", "locked"].includes(this.page)) this.toPage("dashboard")
@@ -199,7 +204,7 @@ export class Wallet {
     this.reconnectTimeout = 5 * 1000
   }
 
-  // WEBSOCK STUFF
+  // WEBSOCKET STUFF
   // ==================================================================
   forceDisconnect() {
     this.forcedLock = true
@@ -390,9 +395,12 @@ export class Wallet {
     // Always returns an array: [work, hash]
     let hashWork = hash
     // Special case if new account: sign the publicKey.
-    if (hash === "0000000000000000000000000000000000000000000000000000000000000000") {
+    if (!hash || hash === "0000000000000000000000000000000000000000000000000000000000000000") {
+      console.log('New account!?', this.account);
       hashWork = this.account.publicKey;
     }
+
+    console.log('hashWork:', hashWork);
 
     if (checkPool) {
       // Check for local cached work
@@ -419,7 +427,7 @@ export class Wallet {
     }
 
     // If server-side work generation went wrong
-    console.log("Using local work...")
+    console.log("Using local work...");
 
     let localwork = false
     if (this.isWebGL2Supported() && this.hasDedicatedGPU()) {
@@ -429,6 +437,7 @@ export class Wallet {
       console.log("Using wasmPOW")
       localwork = await util.getResponseFromAwait(this.wasmPOW(hashWork))
     }
+    console.dir('localwork', localwork);
 
     if (localwork.ok) {
       this.isGenerating = false
@@ -559,6 +568,8 @@ export class Wallet {
       return setTimeout(() => this.processPending(), 1500)
     }
 
+    console.dir('this.frontier', this.frontier)
+
     const work = (await this.getWork(this.frontier, true, true)) || false
     if (!work) {
       console.log("Error generating PoW")
@@ -567,6 +578,8 @@ export class Wallet {
       this.updateView()
       return
     }
+    console.log('nextBlock', nextBlock)
+    console.log('work', work[0])
 
     let block = this.newReceiveBlock(nextBlock, work[0])
     let request = await this.processBlock(block);
@@ -694,6 +707,8 @@ export class Wallet {
       // Generate the work server-side or with a DPOW service
       work: hasWork,
     }
+    console.dir('newReceiveBlock data', data);
+    console.log('newReceiveBlock data', data);
     const signedBlock = block.receive(data, this.account.privateKey);
     return signedBlock;
   }
