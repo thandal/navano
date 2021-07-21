@@ -6,12 +6,32 @@
 
 <h1>Navano javascript test/examples</h1>
 
-<h2>getAddress</h2>
+<h2>version</h2>
+<script>
+window.addEventListener('load', async () => {
+  if (window.nano) {
+    document.getElementById('version_immediate').innerHTML = window.nano.version;
+  }
+});
+</script>
+<p id=version_immediate></p>
+
+<h2>getAddress (immediate)</h2>
+<script>
+window.addEventListener('load', async () => {
+  if (window.nano) {
+    window.nano.getAddress().then(response => document.getElementById('address_immediate').innerHTML = response);
+  }
+});
+</script>
+<p id=address_immediate></p>
+
+<h2>getAddress (with button)</h2>
 <button type="button"
-	onclick="window.nano.getAddress();">
+	onclick="window.nano.getAddress().then(response => document.getElementById('address_button').innerHTML = response);">
         getAddress	
 </button>
-<p id=address></p>
+<p id=address_button></p>
 
 <h2>signMessage</h2>
 <form id=signMessageForm>

@@ -45,12 +45,12 @@ window.addEventListener('message', function (event) {
     console.log('inject_script: message event:', event);
     // Filter on 'nanoResponse' event type.
     if (event.data.type && (event.data.type == 'nanoResponse') && typeof chrome.app.isInstalled !== 'undefined') {
-      if (waitingForAddress && event.data.action && event.data.action == 'signMessage') {
-        signature = event.data.response;
+      if (waitingForSignature && event.data.action && event.data.action == 'signMessage') {
+        signature = event.data.response.signature;
         waitingForSignature = false;
       }
       if (waitingForAddress && event.data.action && event.data.action == 'getAddress') {
-        address = event.data.response;
+        address = event.data.response.address;
         waitingForAddress = false;
       }
     }
