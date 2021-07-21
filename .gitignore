@@ -6,6 +6,9 @@ node_modules/
 /fonts
 package-lock.json
 
+# VIM
+*.swp
+
 # Dont' track ENV variables
 *.env
 .DS_Store

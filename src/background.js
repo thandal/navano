@@ -12,6 +12,7 @@ function startExtension() {
       wallet.openPopup(port)
       port.onDisconnect.addListener(async port => {
         wallet.openWalletView = false
+        wallet.closePort()
       })
     }
   });

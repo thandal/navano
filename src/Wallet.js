@@ -6,38 +6,17 @@ import * as startThreads from "./pow/startThreads.js"
 import * as DOMPurify from "dompurify"
 import { block, wallet, tools } from "nanocurrency-web"
 
-//const DEFAULT_API_URL = "https://mynano.ninja/api/node"
+const DEFAULT_RPC_URL = "https://mynano.ninja/api/node"
 //const DEFAULT_RPC_URL = "http://nano.dais.one:17076"
-const DEFAULT_RPC_URL = "http://localhost:17076"
+//const DEFAULT_RPC_URL = "http://localhost:17076"
 
-//const DEFAULT_WS_URL = "wss://ws.mynano.ninja"
+const DEFAULT_WS_URL = "wss://ws.mynano.ninja"
 //const DEFAULT_WS_URL = "ws://nano.dais.one:17078"
-const DEFAULT_WS_URL = "ws://localhost:17078"
+//const DEFAULT_WS_URL = "ws://localhost:17078"
 
 export class Wallet {
   constructor() {
-    this.port = false
-    this.locked = true
-    this.isViewProcessing = false
-    this.balance = new BigNumber(0)
-
-    this.rpcURL = ""
-    this.wsURL = ""
-    this.socket = { ws: null, connected: false }
-    this.newTransactions$ = new BehaviorSubject(null)
-    this.isSending = false
-    this.isChangingRep = false
-    this.keepAliveSet = false
-    this.offline = true
-    this.reconnectTimeout = 5 * 1000
-    this.keepaliveTimeout = 30 * 1000
-
-    this.signature = ""
-
-    this.isProcessing = false
-    this.successfulBlocks = []
-    this.sendHash = ""
-    this.confirmSend = false
+    this.lock(/*toLocked=*/false)  // Does the rest of the initialization.
   }
 
   // BACKGROUND.JS STARTUP & OPENVIEW FUNCTIONS
@@ -67,15 +46,17 @@ export class Wallet {
     this.toPage(this.page)
   }
 
+  async closePort() {
+    this.port = false
+  }
+
   // WALLET SETUP; IMPORT, DELETE, LOCK, ETC.
   // ==================================================================
   async setupWallet(seed) {
     if (!/[0-9A-Fa-f]{128}/g.test(seed)) return
     let w = wallet.fromSeed(seed);
     this.account = w.accounts[0];
-
     this.workPool = (await util.getLocalStorageItem("work")) || false // {work, hash} from frontier
-
     this.subscribeTransactions()
     this.forcedLock = false
     this.locked = false
@@ -94,35 +75,32 @@ export class Wallet {
         pending: 'true',
       });
 
-    if (!request.ok) {
-      console.log('request not ok')
-      console.dir(request);
-      connectionProblem();
+    console.log("getAccountInfo request", request);
+
+    if (request.response.error == 'Account not found') {
+      this.offline = false  // We're online, but this is an unknown account.
+      this.updateOffline()
       return
     }
 
-    if (request.response.error)
-      console.log("getAccountInfo error", request.response.error);
-
-    if (request.response.error == "Account not found") {
-      console.log(request.response.error);
-      this.offline = false
-      this.checkOffline()
+    if (!request.ok || request.response.message == 'Too Many Requests') {
+      this.resetConnection();
       return
     }
 
+    // Set up wallet info
     const data = request.response;
-    this.balance = new BigNumber(data.balance)
-    this.frontier = data.frontier
-    this.representative = data.representative
-    console.dir('getAccountInfo data', data);
+    console.log('getAccountInfo data', data);
+    if (data.balance) this.balance = new BigNumber(data.balance)
+    if (data.frontier) this.frontier = data.frontier
+    if (data.representative) this.representative = data.representative
 
     this.checkIcon()
     if (["import", "locked"].includes(this.page)) this.toPage("dashboard")
     this.getNewWorkPool()
     this.offline = false
+    this.updateOffline()
     this.updateView()
-    this.checkOffline()
     this.reconnectTimeout = 5 * 1000
   }
 
@@ -133,29 +111,29 @@ export class Wallet {
         count: "-1",
       });
 
-    if (!request.ok) {
-      connectionProblem();
-      return;
-    }
-
-    if (request.response.error)
-      console.log("getAccountHistory error", request.response.error);
+    console.log("getAccountHistory request", request);
 
     if (request.response.error == "Account not found") {
-      this.offline = false;
-      this.checkOffline();
+      this.offline = false  // We're online, but this is an unknown account.
+      this.updateOffline();
       return
     }
 
+    if (!request.ok || request.response.message == 'Too Many Requests') {
+      this.resetConnection();
+      return;
+    }
+
     const data = request.response;
-    this.history = data.history
+    console.dir('getAccountHistory data', data);
+    if (data.history) this.history = data.history
 
     this.checkIcon()
     if (["import", "locked"].includes(this.page)) this.toPage("dashboard")
     this.getNewWorkPool()
     this.offline = false
+    this.updateOffline()
     this.updateView()
-    this.checkOffline()
     this.reconnectTimeout = 5 * 1000
   }
 
@@ -168,25 +146,26 @@ export class Wallet {
         source: "true"
       });
 
-    if (!request.ok) {
-      connectionProblem();
-      return;
-    }
-
     if (request.response.error)
       console.log("getAccountPending error", request.response.error);
 
     if (request.response.error == "Account not found") {
       this.offline = false;
-      this.checkOffline();
+      this.updateOffline();
       return
+    }
+
+    if (!request.ok || request.response.message == 'Too Many Requests') {
+      this.resetConnection();
+      return;
     }
 
     const data = request.response;
     this.pendingBlocks = []
-    if (this.account.address in data.blocks) {
+    if (data.blocks && this.account.address in data.blocks) {
       const pending = data.blocks[this.account.address];
       for (const block in pending) {
+        console.log("pushing pending block", pending[block])
         this.pendingBlocks.push({
           amount: pending[block].amount,
           account: pending[block].source,
@@ -199,54 +178,50 @@ export class Wallet {
     if (["import", "locked"].includes(this.page)) this.toPage("dashboard")
     this.getNewWorkPool()
     this.offline = false
+    this.updateOffline()
     this.updateView()
-    this.checkOffline()
     this.reconnectTimeout = 5 * 1000
   }
 
   // WEBSOCKET STUFF
   // ==================================================================
-  forceDisconnect() {
-    this.forcedLock = true
-    this.updateView()
-    if (this.socket.connected && this.socket.ws) {
-      this.socket.ws.onclose = msg => {}
-      this.socket.ws.onerror = msg => {}
-      this.socket.ws.close()
-      delete this.socket.ws
-      this.socket.connected = false
-    } else {
-      delete this.socket.ws
-      this.socket = { ws: null, connected: false }
+  resetConnection(attemptReconnect = true) {
+    this.offline = true
+    this.updateOffline()
+    if (this.ws) {
+      this.ws.onclose = msg => {}
+      this.ws.onerror = msg => {}
+      this.ws.onmessage = msg => {}
+      this.ws.close()
+      delete this.ws
+    }
+    this.connected = false
+    if (attemptReconnect) {
+      setTimeout(() => this.attemptReconnect(), this.reconnectTimeout)
     }
   }
 
-  connectionProblem() {
-    this.offline = true
-    this.checkOffline()
-    this.socket.ws.onclose = msg => {}
-    this.socket.ws.onerror = msg => {}
-    this.socket.ws.close()
-    delete this.socket.ws
-    this.socket.connected = false
-    setTimeout(() => this.attemptReconnect(), this.reconnectTimeout)
+  attemptReconnect() {
+    this.connect()
+    if (this.reconnectTimeout < 30 * 1000) {
+      this.reconnectTimeout += 5 * 1000 // Slowly increase the timeout up to 30 seconds
+    }
   }
 
   setConnection(data) {
     this.rpcURL = data.rpcURL;
     this.wsURL = data.wsURL;
+    util.setLocalStorageItem("rpcURL", this.rpcURL);
+    util.setLocalStorageItem("wsURL", this.wsURL);
     this.connect();
   }
 
   connect() {
-    if (this.forcedLock) {
-      return
-    }
-    delete this.socket.ws
+    delete this.ws
     const ws = new WebSocket(this.wsURL)
-    this.socket.ws = ws
+    this.ws = ws
     ws.onopen = msg => {
-      this.socket.connected = true
+      this.connected = true
       const confirmation_subscription = JSON.stringify({
         action: 'subscribe',
         topic: "confirmation"
@@ -264,15 +239,15 @@ export class Wallet {
 
     ws.onerror = msg => {
       this.offline = true
-      this.socket.connected = false
-      this.checkOffline()
+      this.connected = false
+      this.updateOffline()
       console.log("Socket error")
     }
 
     ws.onclose = msg => {
       this.offline = true
-      this.checkOffline()
-      this.socket.connected = false
+      this.updateOffline()
+      this.connected = false
       console.log("Socket closed")
       setTimeout(() => this.attemptReconnect(), this.reconnectTimeout)
     }
@@ -280,7 +255,6 @@ export class Wallet {
     ws.onmessage = msg => {
       try {
         let data = JSON.parse(msg.data)
-        console.log('socket onmessage:', data);
         if (data.topic === 'confirmation') {
           this.newTransactions$.next(data.message);
         }
@@ -290,17 +264,10 @@ export class Wallet {
     }
   }
 
-  attemptReconnect() {
-    this.connect()
-    if (this.reconnectTimeout < 30 * 1000) {
-      this.reconnectTimeout += 5 * 1000 // Slowly increase the timeout up to 30 seconds
-    }
-  }
-
   keepAlive() {
     this.keepAliveSet = true
-    if (this.socket.connected) {
-      this.socket.ws.send(JSON.stringify({ alive: 'ping' }));
+    if (this.connected) {
+      this.ws.send(JSON.stringify({ alive: 'ping' }));
     }
     setTimeout(() => { this.keepAlive() }, this.keepaliveTimeout)
   }
@@ -316,6 +283,7 @@ export class Wallet {
           account !== this.account.address &&
           link === this.account.address) {
         // This is a pending transfer TO this account.
+        console.log("PENDING TO", data)
         this.pendingBlocks.unshift({
           amount: data.amount,
           account: account,
@@ -340,23 +308,9 @@ export class Wallet {
         chrome.notifications.create(id, notification_options, function(id) {})
       }
 
-      if (subtype === 'send' &&
-          account === this.account.address &&
-          link !== this.account.address) {
-        // This is a transfer FROM this account.
-        this.frontier = data.hash;
-        this.balance = new BigNumber(data.block.balance);
-        this.history.unshift({
-          amount: data.amount,
-          account: data.block.link_as_account,
-          hash: data.hash,
-          type: "send"
-        })
-        this.updateView()
-      }
-
       if (subtype === 'receive' && account === this.account.address) {
         // This is a confirmed transfer TO this account (receive).
+        console.log("RECEIVE TO", data)
         this.frontier = data.hash
         this.representative = data.block.representative
         if (
@@ -386,6 +340,23 @@ export class Wallet {
         this.checkIcon()
         this.updateView()
       }
+
+      if (subtype === 'send' &&
+          account === this.account.address &&
+          link !== this.account.address) {
+        // This is a transfer FROM this account.
+        console.log("SEND FROM", data)
+        this.frontier = data.hash;
+        this.balance = new BigNumber(data.block.balance);
+        this.history.unshift({
+          amount: data.amount,
+          account: data.block.link_as_account,
+          hash: data.hash,
+          type: "send"
+        })
+        this.updateView()
+      }
+
     })
   }
 
@@ -452,19 +423,14 @@ export class Wallet {
   }
 
   async getNewWorkPool() {
-    let checkHash = this.frontier
-    if (checkHash === "0000000000000000000000000000000000000000000000000000000000000000") {
-      checkHash = this.account.publicKey;
-    }
-
-    if (this.workPool.hash === checkHash && this.workPool.work) return
+    let hash = this.frontier || this.account.publicKey;
+    if (this.workPool.hash === hash && this.workPool.work) return
     if (!this.workPool || typeof this.workPool !== "object") this.workPool = {}
-    const work = (await this.getWork(this.frontier, /*useServer=*/true, /*checkPool=*/false)) || false
+    const work = (await this.getWork(hash, /*useServer=*/true, /*checkPool=*/false)) || false
     if (!work) {
       console.log("1/ Error generating background-PoW")
       return
     }
-
     this.workPool = { work: work[0], hash: work[1] }
     await util.setLocalStorageItem("work", this.workPool)
   }
@@ -492,13 +458,8 @@ export class Wallet {
       errorMessage = "Not enough Mnano in this wallet"
     if (!tools.validateAddress(to)) errorMessage = "Invalid address"
     if (to === this.account.address) errorMessage = "Can't send to yourself"
-    if (this.isViewProcessing)
-      errorMessage = "Still processing pendingblocks..."
-    if (
-      this.frontier === "0000000000000000000000000000000000000000000000000000000000000000"
-    ) {
-      errorMessage = "This account has nothing received yet"
-    }
+    if (this.isViewProcessing) errorMessage = "Still processing pending blocks..."
+    if (!this.frontier) errorMessage = "This account has not received anything yet"
     if (
       this.isSending ||
       this.isChangingRep ||
@@ -568,9 +529,10 @@ export class Wallet {
       return setTimeout(() => this.processPending(), 1500)
     }
 
-    console.dir('this.frontier', this.frontier)
+    let hash = this.frontier || this.account.publicKey
+    console.log('>>> hash', hash);
 
-    const work = (await this.getWork(this.frontier, true, true)) || false
+    const work = (await this.getWork(hash, true, true)) || false
     if (!work) {
       console.log("Error generating PoW")
       this.isViewProcessing = false
@@ -579,7 +541,7 @@ export class Wallet {
       return
     }
     console.log('nextBlock', nextBlock)
-    console.log('work', work[0])
+    console.log('work', work)
 
     let block = this.newReceiveBlock(nextBlock, work[0])
     let request = await this.processBlock(block);
@@ -638,8 +600,7 @@ export class Wallet {
       this.sendToView("errorMessage", "Not a valid address")
       return
     }
-    if (
-      this.frontier ===
+    if (!this.frontier || this.frontier ===
       "0000000000000000000000000000000000000000000000000000000000000000"
     ) {
       this.sendToView("errorMessage", "No open blocks yet")
@@ -655,7 +616,7 @@ export class Wallet {
       return
     }
 
-    let block = this.newChangeBlock(newRep, work[0])
+    let block = this.newRepresentativeBlock(newRep, work[0])
     let request = await this.processBlock(block);
     if (!request.ok) {
       console.log("Change error", request)
@@ -673,7 +634,7 @@ export class Wallet {
     }
   }
 
-  newChangeBlock(newRep, hasWork) {
+  newRepresentativeBlock(newRep, hasWork) {
     const data = {
       // Your current balance in raw nano.
       walletBalanceRaw: this.balance,
@@ -690,16 +651,16 @@ export class Wallet {
     return signedBlock;
   }
 
-  newReceiveBlock(blockinfo, hasWork) {
+  newReceiveBlock(blockinfo, hasWork) {  // May also be an "open" block
     const data = {
       // Your current balance in raw nano.
-      walletBalanceRaw: this.balance,
+      walletBalanceRaw: this.balance || BigNumber(0),
       // Your address
       toAddress: this.account.address,
       // Representative from account info
-      representativeAddress: this.representative,
+      representativeAddress: this.representative || this.account.address,
       // Frontier from account info
-      frontier: this.frontier,
+      frontier: this.frontier || "0000000000000000000000000000000000000000000000000000000000000000",
       // From the pending transaction
       transactionHash: blockinfo.hash,
       // From the pending transaction in RAW
@@ -707,7 +668,6 @@ export class Wallet {
       // Generate the work server-side or with a DPOW service
       work: hasWork,
     }
-    console.dir('newReceiveBlock data', data);
     console.log('newReceiveBlock data', data);
     const signedBlock = block.receive(data, this.account.privateKey);
     return signedBlock;
@@ -764,7 +724,7 @@ export class Wallet {
         if (action === "lock") this.lock()
         if (action === "update") this.updateView()
         if (action === "isLocked") this.sendToView("isLocked", this.locked)
-        if (action === "isOffline") this.checkOffline()
+        if (action === "isOffline") this.updateOffline()
         if (action === "processPending") this.startProcessPending()
         if (action === "checkSend") this.checkSend(data)
         if (action === "confirmSend") this.send(data)
@@ -779,7 +739,7 @@ export class Wallet {
     }
   }
 
-  checkOffline() {
+  updateOffline() {
     if (this.openPopup) {
       if (!this.locked) {
         this.sendToView("isOffline", this.offline)
@@ -851,12 +811,12 @@ export class Wallet {
   }
 
   async lock(toLocked = true) {
-    this.forceDisconnect()
-    this.offline = true
     this.locked = true
     this.newTransactions$ = new BehaviorSubject(null)
     this.reconnectTimeout = 5 * 1000
     this.keepaliveTimeout = 40 * 1000
+
+    this.resetConnection(/*attemptReconnect=*/false)
 
     this.isProcessing = false
     this.isViewProcessing = false
@@ -870,8 +830,8 @@ export class Wallet {
     this.history = []
     this.workPool = {}
 
+    // Completely delete sensitive information.
     delete this.account
-    delete this.account.address
     delete this.balance
     delete this.frontier
     delete this.representative
@@ -941,7 +901,7 @@ export class Wallet {
 
     let prep_balance = '--';
     let full_balance = '--';
-    if (!this.offline) {
+    if (!this.offline && this.balance) {
       full_balance = util.rawToMnano(this.balance).toString();
       prep_balance = full_balance.toString().slice(0, 8)
       if (prep_balance === "0") {
@@ -949,13 +909,16 @@ export class Wallet {
       }
     }
 
+    let address = "";
+    if (this.account) address = this.account.address;
+
     let info = {
       balance: prep_balance,
       total_pending: this.pendingBlocks ? this.pendingBlocks.length : 0,
       transactions,
       full_balance,
       frontier: this.frontier,
-      publicAccount: this.account.address,
+      publicAccount: address,
       isProcessing: this.isViewProcessing,
       representative: this.representative,
       sendHash: this.sendHash,
@@ -973,7 +936,7 @@ export class Wallet {
   // BASIC UTILITY FUNCTIONS
   // ==================================================================
   sendToView(action, data) {
-    this.port.postMessage({ action, data })
+    if (this.port) this.port.postMessage({ action, data })
   }
 
   sendAPIRequest(data) {
