@@ -231,7 +231,7 @@ export class Wallet {
       if (!this.keepaliveSet) {
         this.keepAlive()
       }
-      // Get the current state from the RPC *after* the websocket is set up.
+      // Get the current state from the RPC *after* the websocket is connected!
       this.getAccountInfo()
       this.getAccountHistory()
       this.getAccountPending()
