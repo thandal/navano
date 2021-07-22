@@ -6,6 +6,7 @@ import * as startThreads from "./pow/startThreads.js"
 import * as DOMPurify from "dompurify"
 import { block, wallet, tools } from "nanocurrency-web"
 
+
 const DEFAULT_RPC_URL = "https://mynano.ninja/api/node"
 //const DEFAULT_RPC_URL = "http://nano.dais.one:17076"
 //const DEFAULT_RPC_URL = "http://localhost:17076"
@@ -13,6 +14,7 @@ const DEFAULT_RPC_URL = "https://mynano.ninja/api/node"
 const DEFAULT_WS_URL = "wss://ws.mynano.ninja"
 //const DEFAULT_WS_URL = "ws://nano.dais.one:17078"
 //const DEFAULT_WS_URL = "ws://localhost:17078"
+
 
 export class Wallet {
   constructor() {
@@ -698,12 +700,12 @@ export class Wallet {
   // ==================================================================
 
   signMessage(message) {
-    let signature = this.locked ? "locked" : tools.sign(this.account.privateKey, message);
+    const signature = this.locked ? 'locked' : tools.sign(this.account.privateKey, message);
     return signature;
   }
   
   sign(data) {
-    this.signature = signMessage(data.message);
+    this.signature = this.signMessage(data.message);
     this.updateView()
   }
 
